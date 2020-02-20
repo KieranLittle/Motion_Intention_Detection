@@ -48,11 +48,8 @@ dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a sin
 #%% READ AND EXTRACT FEATURES FROM TEST DATA
 
 filename_list = ['patient_Kieran','patient_Adele','patient_Alessandro']
-<<<<<<< HEAD
-# this is cool 
-=======
 
->>>>>>> parent of 79f44de... Update main.py
+
 i = 0
 extracted_features_test = {}
 trajectory_test = {}
