@@ -512,7 +512,7 @@ def extract_features(segments, peak_amplitude, peak_velocities,  mean_segment_ve
   #df['Time at half traj'] = time_half
   df2['Time at end'] = time_end
   
-  df2 = df2[(np.abs(stats.zscore(df2)) < 3).all(axis=1)]
+  df2 = df2[(np.abs(stats.zscore(df2)) < 4).all(axis=1)]
 
   sns.pairplot(df2)
   plt.show()
@@ -642,8 +642,8 @@ def Support_Vector_Regression(df):
     
     y_test_velocity = y_test.iloc[:,0]
     y_test_time = y_test.iloc[:,1]
-    y_test_amplitude = y_train.iloc[:,2]
-    y_test_mean_vel = y_train.iloc[:,3]
+    y_test_amplitude = y_test.iloc[:,2]
+    y_test_mean_vel = y_test.iloc[:,3]
     
     # Scale the train data to range [0 1] and scale the test data according to the train data
     min_max_scaler = preprocessing.MinMaxScaler()
@@ -661,6 +661,7 @@ def Support_Vector_Regression(df):
     #print(confusion_matrix(y_test,predictions))
     #print(classification_report(y_test,predictions))
     
+    print('Peak Velocity')
     print('MAE:', metrics.mean_absolute_error(y_test_velocity, velocity_predictions))
     print('MSE:', metrics.mean_squared_error(y_test_velocity, velocity_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_velocity, velocity_predictions)))
@@ -697,6 +698,7 @@ def Support_Vector_Regression(df):
     plt.ylabel('Predicted Y')
     plt.show()
     
+    print('Duration')
     print('MAE:', metrics.mean_absolute_error(y_test_time, time_predictions))
     print('MSE:', metrics.mean_squared_error(y_test_time, time_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_time, time_predictions)))
@@ -719,12 +721,13 @@ def Support_Vector_Regression(df):
     
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_amplitude_predictions)
-    plt.plot([1.5,4.5],[1.5,4.5],'r',lw=1)
+    plt.plot([20,100],[20,100],'r',lw=1)
     
     plt.xlabel('Y Test')
     plt.ylabel('Predicted Y')
     plt.show()
     
+    print('Amplitude')
     print('MAE:', metrics.mean_absolute_error(y_test_amplitude, amplitude_predictions))
     print('MSE:', metrics.mean_squared_error(y_test_amplitude, amplitude_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_amplitude, amplitude_predictions)))
@@ -749,19 +752,17 @@ def Support_Vector_Regression(df):
     
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_mean_vel_predictions)
-    plt.plot([1.5,4.5],[1.5,4.5],'r',lw=1)
+    plt.plot([5,50],[5,50],'r',lw=1)
     
     plt.xlabel('Y Test')
     plt.ylabel('Predicted Y')
     plt.show()
     
+    print('Mean Velocity')
     print('MAE:', metrics.mean_absolute_error(y_test_mean_vel, mean_vel_predictions))
     print('MSE:', metrics.mean_squared_error(y_test_mean_vel, mean_vel_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_mean_vel, mean_vel_predictions)))
     print('% Error: ', 100*metrics.mean_absolute_error(y_test_mean_vel, mean_vel_predictions)/np.mean(mean_vel_predictions))
-    
-    
-    
     
     X_test2 = X_test.copy() 
     X_test2['peak_velocity_predictions'] = velocity_predictions
