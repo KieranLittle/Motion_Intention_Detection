@@ -217,6 +217,7 @@ def segment_data(dataset,amplitudes):
     count = 0
     #amplitude_var = np.zeros(len(dataset))
     amplitude_temp = []
+    amplitude_change =[]
     
     traj_segment ={}
     trajectory = {}
@@ -237,20 +238,29 @@ def segment_data(dataset,amplitudes):
           #amplitude_var[j] = amplitudes[count]
           trajectory[count] = dataset.iloc[j:j+400,:] #400
           
-          amplitude_temp.append(np.max(trajectory[count]['imu']))      #amplitudes[count])
+          amplitude_temp.append(np.max(trajectory[count]['imu'])-dataset['imu'][j])      #amplitudes[count])
           max_amp = np.max(trajectory[count]['imu'])
           
-          amp_range = trajectory[count].loc[(trajectory[count]['imu'] > 0.98*max_amp)]
+          amp_range = trajectory[count].loc[(trajectory[count]['imu'] > max_amp-5)]
           amp_range_index = amp_range.index[0]
           
           #max_amp_index = trajectory[count].index[trajectory[count]['imu'] == max_amp].tolist()
           
           trajectory[count] = dataset.iloc[j:amp_range_index+50,:]
-          peak_velocity = np.max(np.diff(dataset[j:j+400]['imu'],1))/0.01
+          
+          a = trajectory[count].loc[(trajectory[count]['imu'] < (5.0+dataset['imu'][j]))]
+          
+          if (a.index[-1]-50 < dataset['time'][j]):
+              x = j#x = dataset['time'][j]
+          else:
+              x = a.index[-1]-50
+          
+          trajectory[count] = dataset.iloc[x:amp_range_index+50,:]
+          
+          peak_velocity = np.max(np.diff(trajectory[count]['imu'],1))/0.01   #np.max(np.diff(dataset[j:j+400]['imu'],1))/0.01
           
           #end_window = j+50
           
-          a = trajectory[count].loc[(trajectory[count]['imu'] < (10.0+dataset['imu'][j]))]
           #a = dataset[j:j+1]
           # a = a.reset_index()
           
@@ -279,13 +289,16 @@ def segment_data(dataset,amplitudes):
           time_3degrees = [ round(elem, 2) for elem in time_3degrees ]
           
           #traj_segment[count] = dataset.iloc[a.index[-1]-duration_window:a.index[-1],:] #dataset.iloc[j:end_window,:]#dataset.iloc[a.index[0]-80:a.index[0],:]
-          traj_segment[count] = dataset.iloc[j:a.index[-1],:]
+          traj_segment[count] = dataset.iloc[x:a.index[-1],:]#dataset.iloc[j:a.index[-1],:]
           #mean_velocity = np.mean(np.diff(dataset[a.index[-1]-duration_window:amp_range_index+50]['imu'],1))/0.01
-          mean_velocity = np.mean(np.diff(dataset[j:amp_range_index+50]['imu'],1))/0.01
+          mean_velocity = np.mean(np.diff(trajectory[count]['imu'],1))/0.01
            
           peak_segment_velocity.append(peak_velocity)
           mean_segment_velocity.append(mean_velocity)
           #####
+          c = dataset.iloc[amp_range_index+50,2]-dataset['imu'][j]
+          
+          amplitude_change.append(c)
           
           count=count+1
           
@@ -295,7 +308,7 @@ def segment_data(dataset,amplitudes):
 #    time_half = [ round(elem, 2) for elem in time_half ]
 #    time_end  = [ round(elem, 2) for elem in time_end  ]    
 #          
-    return traj_segment, trajectory, amplitude_temp, peak_segment_velocity, mean_segment_velocity, time_3degrees,time_half,time_end, segment_cut_off, segment_max_point
+    return traj_segment, trajectory, amplitude_change, peak_segment_velocity, mean_segment_velocity, time_3degrees,time_half,time_end, segment_cut_off, segment_max_point
     
 def plot_segments(segments, peak_amplitude,peak_velocity):
     
@@ -350,7 +363,7 @@ def plot_traj(trajectory,segment_line, segment_max_point):
         plt.figure(segment_num,figsize=(15,4)) 
         #plt.suptitle('Peak Velocity: ' +str(peak_velocity[segment_num]) +' , Peak Amplitude: '+ str(peak_amplitude[segment_num]))
         
-        time = trajectory[segment_num]['time']-trajectory[segment_num].iloc[0,0]
+        time = trajectory[segment_num]['time']#-trajectory[segment_num].iloc[0,0]
         
         plt.subplot(1,6,1)
         plt.plot(time,trajectory[segment_num]['imu'])
@@ -512,7 +525,7 @@ def extract_features(segments, peak_amplitude, peak_velocities,  mean_segment_ve
   #df['Time at half traj'] = time_half
   df2['Time at end'] = time_end
   
-  df2 = df2[(np.abs(stats.zscore(df2)) < 4).all(axis=1)]
+  #df2 = df2[(np.abs(stats.zscore(df2)) < 2).all(axis=1)]
 
   sns.pairplot(df2)
   plt.show()
@@ -633,7 +646,11 @@ def Support_Vector_Regression(df):
     y = df[['Peak Velocity','Time at end','Peak Amplitude','Mean Velocity']]
     
     # Split the data into train and test randomly with the test size = 30%, stratify data to split classification evenly
-    X_train, X_test, y_train, y_test = train_test_split(X_org, y, test_size=0.30, random_state=42) #random_state=42
+    X_train, X_test, y_train, y_test = train_test_split(X_org, y, test_size=0.20, random_state=42) #random_state=42
+    
+    features_int = ['biceps_max'] #'curr_acc' biceps_max','curr_triceps_change2'] #'curr_acc'
+    X_train_peak_vel = X_train#[features_int]
+    X_test_peak_vel = X_test#[features_int]
     
     y_train_velocity = y_train.iloc[:,0]
     y_train_time = y_train.iloc[:,1]
@@ -647,10 +664,10 @@ def Support_Vector_Regression(df):
     
     # Scale the train data to range [0 1] and scale the test data according to the train data
     min_max_scaler = preprocessing.MinMaxScaler()
-    X_train_scaled = min_max_scaler.fit_transform(X_train)
-    X_test_scaled = min_max_scaler.transform(X_test)
+    X_train_scaled = min_max_scaler.fit_transform(X_train_peak_vel)
+    X_test_scaled = min_max_scaler.transform(X_test_peak_vel)
     
-    clf = SVR(kernel = 'rbf',C= 10, gamma = 1, epsilon=1,degree=2) # 10,100
+    clf = SVR(kernel = 'rbf',C= 100, gamma = 1, epsilon=1,degree=2) # 10,100
     clf.fit(X_train_scaled, y_train_velocity)
     
     # Generate predictions for test set
@@ -666,22 +683,31 @@ def Support_Vector_Regression(df):
     print('MSE:', metrics.mean_squared_error(y_test_velocity, velocity_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_velocity, velocity_predictions)))
     
-    #print(clf.score(velocity_predictions,y_test_velocity))
-    print('% Error: ', 100*metrics.mean_absolute_error(y_test_velocity, velocity_predictions)/np.mean(velocity_predictions))
-    #print(clf.coef_)
+    print('% Error: ', 100*metrics.mean_absolute_error(y_test_velocity, velocity_predictions)/np.mean(y_test_velocity),'\n')
+    
+    # print('Coefficients: ')
+    # pd.set_option('display.max_columns', df.shape[1]+1)
+    # coeffs = np.abs(clf.coef_)/np.sum(np.abs(clf.coef_))*100
+    # df = pd.DataFrame(data = coeffs, columns = X_train_peak_vel.columns.tolist())
+    # df = df.loc[0].abs().sort_values()
+    # print(df,'\n')
     
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_velocity_predictions)
     plt.plot([0,200],[0,200],'r',lw=1)
+    plt.title('Peak Velocity Prediction')
     
     #plt.scatter(y_test,predictions)
     plt.show()
+    
+    
+    #%%############# DURATION ###################
     
     # Scale the train data to range [0 1] and scale the test data according to the train data
     min_max_scaler2 = preprocessing.MinMaxScaler()
     X_train_scaled = min_max_scaler2.fit_transform(X_train)
     X_test_scaled = min_max_scaler2.transform(X_test)
     
-    clf2 = SVR(kernel = 'rbf',C=10,gamma=0.1,epsilon=0.01,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
+    clf2 = SVR(kernel = 'rbf',C=10,gamma=1,epsilon=1,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
     clf2.fit(X_train_scaled,y_train_time)
     
     # The coefficients
@@ -692,6 +718,7 @@ def Support_Vector_Regression(df):
     
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_time_predictions)
+    plt.title('Duration Prediction')
     plt.plot([1.5,4.5],[1.5,4.5],'r',lw=1)
     
     plt.xlabel('Y Test')
@@ -702,26 +729,40 @@ def Support_Vector_Regression(df):
     print('MAE:', metrics.mean_absolute_error(y_test_time, time_predictions))
     print('MSE:', metrics.mean_squared_error(y_test_time, time_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_time, time_predictions)))
-    print('% Error: ', 100*metrics.mean_absolute_error(y_test_time, time_predictions)/np.mean(time_predictions))
+    print('% Error: ', 100*metrics.mean_absolute_error(y_test_time, time_predictions)/np.mean(y_test_time))
+    
+    # print('Coefficients: ')
+    # #pd.set_option('display.max_columns', df.shape[1]+1)
+    # coeffs2 = np.abs(clf2.coef_)/np.sum(np.abs(clf2.coef_))*100
+    # df = pd.DataFrame(data = coeffs2, columns = X_train.columns.tolist())
+    # df = df.loc[0].abs().sort_values()
+    # print(df,'\n')
     
     #%%%%%%%%%%% AMPLTIUDE %%%%%%%%%%%%%%
         # Scale the train data to range [0 1] and scale the test data according to the train data
-    min_max_scaler2 = preprocessing.MinMaxScaler()
-    X_train_scaled = min_max_scaler2.fit_transform(X_train)
-    X_test_scaled = min_max_scaler2.transform(X_test)
     
-    clf2 = SVR(kernel = 'rbf',C=10,gamma=0.1,epsilon=0.01,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
-    clf2.fit(X_train_scaled,y_train_amplitude)
+    features_int = ['curr_acc']
+    
+    X_train_amplitude = X_train#[features_int]
+    X_test_amplitude = X_test#[features_int]
+    
+    min_max_scaler2 = preprocessing.MinMaxScaler()
+    X_train_scaled = min_max_scaler2.fit_transform(X_train_amplitude)
+    X_test_scaled = min_max_scaler2.transform(X_test_amplitude)
+    
+    clf3 = SVR(kernel = 'linear',C=10,gamma=0.1,epsilon=0.01,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
+    clf3.fit(X_train_scaled,y_train_amplitude)
     
     # The coefficients
     #print('Coefficients: \n', lm.coef_)
     
-    amplitude_predictions = clf2.predict(X_test_scaled)
+    amplitude_predictions = clf3.predict(X_test_scaled)
     df_amplitude_predictions = pd.DataFrame({'y_test':y_test_amplitude, 'predictions':amplitude_predictions})
     
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_amplitude_predictions)
     plt.plot([20,100],[20,100],'r',lw=1)
+    plt.title('Amplitude Prediction')
     
     plt.xlabel('Y Test')
     plt.ylabel('Predicted Y')
@@ -731,8 +772,14 @@ def Support_Vector_Regression(df):
     print('MAE:', metrics.mean_absolute_error(y_test_amplitude, amplitude_predictions))
     print('MSE:', metrics.mean_squared_error(y_test_amplitude, amplitude_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_amplitude, amplitude_predictions)))
-    print('% Error: ', 100*metrics.mean_absolute_error(y_test_amplitude, time_predictions)/np.mean(amplitude_predictions))
+    print('% Error: ', 100*metrics.mean_absolute_error(y_test_amplitude, amplitude_predictions)/np.mean(y_test_amplitude))
+    print('Coefficients: ')
     
+    #pd.set_option('display.max_columns', df.shape[1]+1)
+    coeffs3 = np.abs(clf3.coef_)/np.sum(np.abs(clf3.coef_))*100
+    df = pd.DataFrame(data = coeffs3, columns = X_train_amplitude.columns.tolist())
+    df = df.loc[0].abs().sort_values()
+    print(df,'\n')
     
      #%%%%%%%%%%% MEAN VEL %%%%%%%%%%%%%%
     
@@ -741,17 +788,18 @@ def Support_Vector_Regression(df):
     X_train_scaled = min_max_scaler2.fit_transform(X_train)
     X_test_scaled = min_max_scaler2.transform(X_test)
     
-    clf2 = SVR(kernel = 'rbf',C=10,gamma=0.1,epsilon=0.01,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
-    clf2.fit(X_train_scaled,y_train_mean_vel)
+    clf4 = SVR(kernel = 'rbf',C=100,gamma=1,epsilon=1,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
+    clf4.fit(X_train_scaled,y_train_mean_vel)
     
     # The coefficients
     #print('Coefficients: \n', lm.coef_)
     
-    mean_vel_predictions = clf2.predict(X_test_scaled)
+    mean_vel_predictions = clf4.predict(X_test_scaled)
     df_mean_vel_predictions = pd.DataFrame({'y_test':y_test_mean_vel, 'predictions':mean_vel_predictions})
     
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_mean_vel_predictions)
+    plt.title('Mean Velocity Prediction')
     plt.plot([5,50],[5,50],'r',lw=1)
     
     plt.xlabel('Y Test')
@@ -762,7 +810,14 @@ def Support_Vector_Regression(df):
     print('MAE:', metrics.mean_absolute_error(y_test_mean_vel, mean_vel_predictions))
     print('MSE:', metrics.mean_squared_error(y_test_mean_vel, mean_vel_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_mean_vel, mean_vel_predictions)))
-    print('% Error: ', 100*metrics.mean_absolute_error(y_test_mean_vel, mean_vel_predictions)/np.mean(mean_vel_predictions))
+    print('% Error: ', 100*metrics.mean_absolute_error(y_test_mean_vel, mean_vel_predictions)/np.mean(y_test_mean_vel))
+    print('Coefficients: ')
+    
+    # #pd.set_option('display.max_columns', df.shape[1]+1)
+    # coeffs4 = np.abs(clf4.coef_)/np.sum(np.abs(clf4.coef_))*100
+    # df = pd.DataFrame(data = coeffs4, columns = X_train.columns.tolist())
+    # df = df.loc[0].abs().sort_values()
+    # print(df,'\n')
     
     X_test2 = X_test.copy() 
     X_test2['peak_velocity_predictions'] = velocity_predictions
@@ -770,7 +825,7 @@ def Support_Vector_Regression(df):
     X_test2['amplitude_predictions'] = amplitude_predictions
     X_test2['mean_vel_predictions'] = mean_vel_predictions
     
-    return X_test2,y_test 
+    return X_test2,y_test
     
 def predict_values(dataset,clf,clf2,min_max_scaler, min_max_scaler2):
     
@@ -866,9 +921,9 @@ def plot_predicted_traj(df_predictions_SVM,trajectory):
     for segment_num in range(40,80):
     
         current = trajectory[segment_num].iloc[0,2]
-        setpoint = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]*df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-2]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]
+        setpoint = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-3]*df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]
         frequency = 100
-        time = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#(df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]-current)/df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-2]
+        time = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-3]#(df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]-current)/df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-2]
         
         traj1, traj_vel = mjtg(current, setpoint, frequency, time)
         
@@ -878,7 +933,6 @@ def plot_predicted_traj(df_predictions_SVM,trajectory):
         end_segment_point = trajectory[segment_num].iloc[0,2]+5.0
         
         traj = traj[traj>end_segment_point]
-        
     
         # Create plot.
         #xaxis = [i / frequency for i in range(1, int(time * frequency))]
@@ -886,7 +940,6 @@ def plot_predicted_traj(df_predictions_SVM,trajectory):
         xaxis = np.linspace(0.0,6.0,601)
         
         index_ = trajectory[segment_num].loc[(trajectory[segment_num]['imu'] > end_segment_point)].index[0]- trajectory[segment_num].index[0]
-        
         
     #    if len(traj) > len(trajectory[segment_num]):
     #        traj = traj[0:len(trajectory[segment_num])]
