@@ -219,6 +219,8 @@ def segment_data(dataset,amplitudes):
     amplitude_temp = []
     amplitude_change =[]
     
+    start_angle = []
+    
     traj_segment ={}
     trajectory = {}
     
@@ -296,6 +298,8 @@ def segment_data(dataset,amplitudes):
           peak_segment_velocity.append(peak_velocity)
           mean_segment_velocity.append(mean_velocity)
           #####
+          start_angle.append(dataset['imu'][x])
+          
           c = dataset.iloc[amp_range_index+50,2]-dataset['imu'][j]
           
           amplitude_change.append(c)
@@ -308,7 +312,7 @@ def segment_data(dataset,amplitudes):
 #    time_half = [ round(elem, 2) for elem in time_half ]
 #    time_end  = [ round(elem, 2) for elem in time_end  ]    
 #          
-    return traj_segment, trajectory, amplitude_change, peak_segment_velocity, mean_segment_velocity, time_3degrees,time_half,time_end, segment_cut_off, segment_max_point
+    return traj_segment, trajectory, amplitude_change, peak_segment_velocity, mean_segment_velocity, time_3degrees,time_half,time_end, segment_cut_off, segment_max_point,start_angle
     
 def plot_segments(segments, peak_amplitude,peak_velocity):
     
@@ -744,13 +748,22 @@ def Support_Vector_Regression(df):
     features_int = ['curr_acc']
     
     X_train_amplitude = X_train#[features_int]
-    X_test_amplitude = X_test#[features_int]
+    X_test_amplitude = X_test
+    
+    # scaled_X_train = min_max_scaler.fit_transform(X_train)
+    # scaled_X_test = min_max_scaler.fit_transform(X_test)
+    
+    # velocity_predictions_train = clf.predict(scaled_X_train)
+    # velocity_predictions_test = clf.predict(scaled_X_test)
+    
+    # X_train_amplitude['predicted mean velocity'] = velocity_predictions_train
+    # X_test_amplitude['predicted mean velocity'] = velocity_predictions_test#[features_int]
     
     min_max_scaler2 = preprocessing.MinMaxScaler()
     X_train_scaled = min_max_scaler2.fit_transform(X_train_amplitude)
     X_test_scaled = min_max_scaler2.transform(X_test_amplitude)
     
-    clf3 = SVR(kernel = 'linear',C=10,gamma=0.1,epsilon=0.01,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
+    clf3 = SVR(kernel = 'rbf',C=10,gamma=0.1,epsilon=0.01,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
     clf3.fit(X_train_scaled,y_train_amplitude)
     
     # The coefficients
@@ -773,13 +786,13 @@ def Support_Vector_Regression(df):
     print('MSE:', metrics.mean_squared_error(y_test_amplitude, amplitude_predictions))
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_amplitude, amplitude_predictions)))
     print('% Error: ', 100*metrics.mean_absolute_error(y_test_amplitude, amplitude_predictions)/np.mean(y_test_amplitude))
-    print('Coefficients: ')
+    # print('Coefficients: ')
     
-    #pd.set_option('display.max_columns', df.shape[1]+1)
-    coeffs3 = np.abs(clf3.coef_)/np.sum(np.abs(clf3.coef_))*100
-    df = pd.DataFrame(data = coeffs3, columns = X_train_amplitude.columns.tolist())
-    df = df.loc[0].abs().sort_values()
-    print(df,'\n')
+    # #pd.set_option('display.max_columns', df.shape[1]+1)
+    # coeffs3 = np.abs(clf3.coef_)/np.sum(np.abs(clf3.coef_))*100
+    # df = pd.DataFrame(data = coeffs3, columns = X_train_amplitude.columns.tolist())
+    # df = df.loc[0].abs().sort_values()
+    # print(df,'\n')
     
      #%%%%%%%%%%% MEAN VEL %%%%%%%%%%%%%%
     

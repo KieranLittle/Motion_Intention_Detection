@@ -14,7 +14,7 @@ import pickle
 
 from functions import read_file, resample, filter_smooth, segment_data, \
 plot_segments, extract_features, MLR, filteremg, Support_Vector_Regression, plot_traj, predict_values, \
-evaluate, plot_predicted_traj,  normalise_MVC
+evaluate, plot_predicted_traj,  normalise_MVC, mjtg
 
 #%% READ TRAINING DATA AND TRAIN SVM
 
@@ -32,7 +32,7 @@ dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a sin
 
 # ## Segment data
 
-traj_segments,trajectory, peak_amplitude, peak_velocities,  mean_segment_velocity,time_3degrees,time_half,time_end, segment_line, segment_max_point = segment_data(dataset_filtered, amplitudes)
+traj_segments,trajectory, peak_amplitude, peak_velocities,  mean_segment_velocity,time_3degrees,time_half,time_end, segment_line, segment_max_point, start_angle = segment_data(dataset_filtered, amplitudes)
 
 plot_traj(trajectory,segment_line, segment_max_point)
 
@@ -52,6 +52,7 @@ filename_list = ['patient_Kieran','patient_Adele','patient_Alessandro']
 i = 0
 extracted_features_test = {}
 trajectory_test = {}
+start_angle = {}
 
 for filename in filename_list:
     
@@ -75,7 +76,7 @@ for filename in filename_list:
         
         ## Segment data
         
-        traj_segments_test,trajectory_test[i], peak_amplitude_test, peak_velocities_test,  mean_segment_velocity_test ,time_3degrees_test ,time_half_test,time_end_test, segment_line_test, segment_max_point_test = segment_data(dataset_filt_norm, amplitudes)
+        traj_segments_test,trajectory_test[i], peak_amplitude_test, peak_velocities_test,  mean_segment_velocity_test ,time_3degrees_test ,time_half_test,time_end_test, segment_line_test, segment_max_point_test, start_angle[i] = segment_data(dataset_filt_norm, amplitudes)
         
         #plot_segments(traj_segments_test, peak_amplitude, peak_velocities)
         #plot_traj(trajectory,segment_line, segment_max_point)
@@ -104,28 +105,74 @@ for k in range(1,6):
 #%%        
 from scipy import stats
         
-full_combined_features = full_combined_features[(np.abs(stats.zscore(full_combined_features)) < 3).all(axis=1)]
+from scipy.stats import zscore
+np.seterr(divide='warn', invalid='warn')
+
+#full_combined_features = full_combined_features[(np.abs(stats.zscore(full_combined_features, nan_policy='omit')) < 3).all(axis=1)]
        
+#full_combined_features = full_combined_features[full_combined_features.apply(zscore)<2]
+
 import seaborn as sns   
-sns.pairplot(full_combined_features)
+#sns.pairplot(full_combined_features)
 
 #%%
 
-for traj in range(0,len(full_combined_trajectories)):
+from sklearn.metrics import r2_score
 
-    plt.plot(full_combined_trajectories[traj]['time'], full_combined_trajectories[traj]['imu'])
+r2score = []
+
+for p in range(0,len(full_combined_trajectories)):
+    
+    start = full_combined_trajectories[p].iloc[0,2]
+    end = full_combined_trajectories[p].iloc[-1,2]
+    time_start_ = full_combined_trajectories[p].iloc[0,0]
+    time_end_ = full_combined_trajectories[p].iloc[-1,0]
+    
+    minimum_jerk_for_comp, vel = mjtg(start, end-start, 100, time_end_-time_start_)  #mjtg(start_angle[p], peak_amplitude[p]+start_angle[p], 101, time_end[p])
+    
+    #time = np.linspace(0,time_end[p]-0.01,int(time_end[p]*100))
+    
+    # plt.plot(time,minimum_jerk_for_comp[0:len(time)])
+    # plt.plot(time,trajectory[p].iloc[0:len(time),2])
+    
+    plt.show()
+    
+    coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),2])
+    r2score.append(coefficient_of_dermination)
+    
+print(r2score)
+
+#%%
+
+filtered_mj_traj = full_combined_trajectories
+filtered_mj_feat = full_combined_features
+
+for h in range(0, len(full_combined_trajectories.keys())):
+    
+    if r2score[h] < 0.9:
+        del filtered_mj_traj[h]
+        filtered_mj_feat.drop([h],inplace=True)
+        
+
+#filtered_mj_feat = filtered_mj_feat[(np.abs(stats.zscore(filtered_mj_feat)) < 3).all(axis=1)]
+
+#%%
+
+for traj in range(0,20):
+
+    plt.plot(filtered_mj_traj[traj]['time'], filtered_mj_traj[traj]['imu'])
     plt.show()
 
 
 #%%   
 
 #clf,clf2,min_max_scaler, min_max_scaler2 
-X_test,y_test = Support_Vector_Regression(full_combined_features)      
+X_test,y_test = Support_Vector_Regression(filtered_mj_feat)      
 
 #full_combined_trajectories_test = full_combined_trajectories[full_combined_trajectories.keys()==X_test.index]
 indices = X_test.index.tolist()
 
-test_trajectories = [full_combined_trajectories[i] for i in full_combined_trajectories.keys() if i in indices] 
+test_trajectories = [filtered_mj_traj[i] for i in filtered_mj_traj.keys() if i in indices] 
 #evaluate(full_combined_features)    
         
  #%% MAKE PREDICTIONS ON TEST DATA
