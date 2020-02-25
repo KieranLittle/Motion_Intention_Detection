@@ -32,15 +32,15 @@ dataset2 = resample(dataset)
 
 dataset_filtered = filter_smooth(dataset2)
 
-# Segment data
+# ## Segment data
 
-traj_segments,trajectory, peak_amplitude, peak_velocities,  mean_segment_velocity,time_3degrees,time_half,time_end, segment_line, segment_max_point, start_angle = segment_data(dataset_filtered, amplitudes)
+traj_segments,trajectory, df_trajectories = segment_data(dataset_filtered, amplitudes)
 
-plot_traj(trajectory,segment_line, segment_max_point)
+# plot_traj(trajectory,segment_line, segment_max_point)
 
-plot_segments(traj_segments, peak_amplitude, peak_velocities)
+plot_segments(traj_segments, df_trajectories['amplitude_change'], df_trajectories['peak_velocity'])
 
-# extracted_features = extract_features(traj_segments,peak_amplitude, peak_velocities, mean_segment_velocity, time_3degrees,time_half,time_end)
+extracted_features = extract_features(traj_segments,df_trajectories)
 
 # Training
 
@@ -78,12 +78,12 @@ for filename in filename_list:
         
         ## Segment data
         
-        traj_segments_test,trajectory_test[i], peak_amplitude_test, peak_velocities_test,  mean_segment_velocity_test ,time_3degrees_test ,time_half_test,time_end_test, segment_line_test, segment_max_point_test, start_angle[i] = segment_data(dataset_filt_norm, amplitudes)
+        traj_segments_test,trajectory_test[i], df_trajectories_test = segment_data(dataset_filt_norm, amplitudes)
         
         #plot_segments(traj_segments_test, peak_amplitude, peak_velocities)
         #plot_traj(trajectory,segment_line, segment_max_point)
         
-        extracted_features_test[i] = extract_features(traj_segments_test,peak_amplitude_test, peak_velocities_test, mean_segment_velocity_test, time_3degrees_test,time_half_test,time_end_test)
+        extracted_features_test[i] = extract_features(traj_segments_test,df_trajectories_test)
         i = i+1
 
 #%% COMBINE FEATURES AND TRAJECTORY INTO 1 DICTIONARY EACH
@@ -151,13 +151,6 @@ filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
 
 sns.pairplot(filtered_mj_feat)
 #filtered_mj_out_feat = filtered_mj_feat.copy()
-#%%
-        
-# for j in range(0,len(filtered_mj_feat.columns)):
-    
-#         q = filtered_mj_feat.iloc[:,j].quantile(0.99)
-#         filtered_mj_out_feat = filtered_mj_feat[filtered_mj_feat.iloc[:,j]<q]
-
 
 #%% REMOVE OUTLIERS
 
