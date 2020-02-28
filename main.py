@@ -20,8 +20,8 @@ evaluate, plot_predicted_traj,  normalise_MVC, mjtg
 
 #%% READ TRAINING DATA AND TRAIN SVM
 
-filename = 'patient_Kieran'
-trial_num = '4'
+filename = 'patient_Alessandro'
+trial_num = '1'
 
 dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a single dataset (imu and emg)
 
@@ -36,7 +36,7 @@ dataset_filtered = filter_smooth(dataset2)
 
 traj_segments,trajectory, df_trajectories = segment_data(dataset_filtered, amplitudes)
 
-# plot_traj(trajectory,segment_line, segment_max_point)
+plot_traj(trajectory,df_trajectories['segment_cut_off'], df_trajectories['segment_max_point'])
 
 plot_segments(traj_segments, df_trajectories['amplitude_change'], df_trajectories['peak_velocity'])
 
@@ -138,7 +138,7 @@ filtered_mj_feat = full_combined_features.copy()
 
 for h in range(0, len(full_combined_trajectories.keys())):
     
-    if r2score[h] < 0.9:
+    if r2score[h] < 0.8:
         del filtered_mj_traj[h]
         filtered_mj_feat.drop([h],inplace=True)
         
@@ -148,8 +148,8 @@ filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
 
         
 #%%
-
-sns.pairplot(filtered_mj_feat)
+sns.pairplot(full_combined_features)
+#sns.pairplot(filtered_mj_feat)
 #filtered_mj_out_feat = filtered_mj_feat.copy()
 
 #%% REMOVE OUTLIERS
@@ -163,9 +163,9 @@ sns.pairplot(filtered_mj_feat_out)
 
 #%%
 
-for traj in range(0,20):
+for traj in range(0,40):
 
-    plt.plot(filtered_mj_traj[traj]['time'], filtered_mj_traj[traj]['imu'])
+    plt.plot(full_combined_trajectories[traj]['time'], full_combined_trajectories[traj]['angular position'])
     plt.show()
 
 #%%   

@@ -192,7 +192,7 @@ def filter_smooth(old_dataset):
     
     new_dataset = old_dataset.copy()
     
-    new_dataset['angular position'] = lowpass_filter(new_dataset['time'],new_dataset['imu'],2,2,100)
+    new_dataset['angular position'] = lowpass_filter(new_dataset['time'],new_dataset['imu'],1,2,100)
     
     new_dataset.drop('imu',axis=1,inplace=True)
     
@@ -239,6 +239,7 @@ def segment_data(dataset,amplitudes):
     start_angle = []
     traj_segment ={}
     trajectory = {}
+    trajectory_temp = {}
     
     time_start = []
     time_half = []
@@ -253,23 +254,54 @@ def segment_data(dataset,amplitudes):
       if (dataset['time'][j] % 8.0 == 0.0) & (dataset['time'][j] != 0.0) & (dataset['time'][j] != 1200.0): #& (dataset['imu'][j] < 5):
           
           # Define initial trajectory
-          trajectory[count] = dataset.iloc[j:j+400,:] #400
+          trajectory_temp[count] = dataset.iloc[j:j+500,:] #400
+          #f = trajectory_temp[count].loc[((trajectory_temp[count].iloc[:,-3] > np.max(trajectory_temp[count].iloc[:,-3]-5)))] #& (trajectory_temp[count].iloc[:,-2]>0))] 
+                                          
+          #trajectory[count] = trajectory_temp[count].iloc[0:f.index[0]]
                  
           # Define the end point of the trajectory:
           #amp_range = trajectory[count].loc[(trajectory[count]['angular position'] > max_amp-5)]
-          amp_range = trajectory[count].loc[trajectory[count]['angular velocity'] > 0.01+dataset.iloc[j,-2]]
+          end_traj = trajectory_temp[count]
+          
+          #diff
+          
+          # try:
+          #     limit = 0.01#+dataset.iloc[j,-2]
+          #     amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] 
+          #     end_amplitude_index = amp_range.index[0]+40
+          # except:
+          #     try:
+          #         limit = 0.05#+dataset.iloc[j,-2]
+          #         amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] 
+          #         end_amplitude_index = amp_range.index[0]+40
+          #     except:
+ 
+          #         end_amplitude_index = end_traj.index[-1]
+              
+          amp_range = end_traj.loc[(end_traj.iloc[:,-2] > 0.1)]#max(end_traj.iloc[:,-3])-1)] 
           end_amplitude_index = amp_range.index[-1]
+          
+              
+          #amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] #+dataset.iloc[j,-2])]
+          
+          #amp_range = trajectory[count].loc[(trajectory[count].iloc[:,-2] > 0.02+dataset.iloc[j,-2])&(trajectory[count]['angular velocity']>0)&(trajectory[count]['angular acceleration']<0)]
+          #end_amplitude_index = amp_range.index[0]
           
           # Define the start point of the trajectory
           #a = trajectory[count].loc[(trajectory[count]['angular acceleration']) > 0.001] #(10.0+dataset['angular position'][j]
-          a = trajectory[count].loc[(trajectory[count]['angular velocity']) > 0.01+dataset.iloc[j,-2]]  
+          # p = (trajectory[count]['angular velocity']) > 0.01+dataset.iloc[j,-2]
+          # z = p>0
+          
+          #a = trajectory[count].loc[(trajectory[count]['angular velocity'] > 0.01)&(trajectory[count]['angular velocity']>0)]  
+          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,-2] > 0.0)]   #&(trajectory[count]['angular velocity']>0)]  
+          
           start_amplitude_index = a.index[0]
           
           # Segment trajectory:        
-          trajectory[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]
+          trajectory[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]#end_amplitude_index,:]
           
           # Define window:
-          b = trajectory[count].loc[(trajectory[count]['angular position']) < 10.0+dataset['angular position'][start_amplitude_index]]
+          b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < 5+trajectory[count].iloc[0,-3])]      #+trajectory[count].iloc[0,-3])]
           traj_segment[count] = dataset.iloc[start_amplitude_index:b.index[-1],:] 
           
           # Measure variables that define the trajectory: 
@@ -282,11 +314,18 @@ def segment_data(dataset,amplitudes):
           
           # Find the time at half the cycle
           d = trajectory[count].loc[(trajectory[count]['angular position'] < (amplitude_change_/2))]
-          half_time = d.iloc[-1,0]- trajectory[count].iloc[0,0]
-          time_half.append(half_time)
-         
+          
+          try:
+              half_time_ = d.iloc[-1,0]- trajectory[count].iloc[0,0]
+              amplitude_half = d.iloc[-1,-3] - start_amplitude
+          except:
+              half_time_ = -20
+              amplitude_half = -20
+    
+          time_half.append(half_time_)
+            
           # Find the amplitude at halfway
-          amplitude_half = d.iloc[-1,-3] - start_amplitude
+          #amplitude_half = d.iloc[-1,-3] - start_amplitude
           half_amplitude_change.append(amplitude_half)
           
           # Find peak and mean velocity
@@ -316,6 +355,7 @@ def segment_data(dataset,amplitudes):
 #          
     dict = {'amplitude_change': amplitude_change, 'peak_velocity': peak_segment_velocity, 'mean_velocity': mean_segment_velocity, \
             'time_half':time_half, 'time_end':time_end, 'segment_cut_off':segment_cut_off, 'segment_max_point':segment_max_point, 'start_angle':start_angle}
+        
     df = pd.DataFrame(dict)
         
     return traj_segment, trajectory,df
