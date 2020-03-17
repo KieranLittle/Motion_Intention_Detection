@@ -20,7 +20,7 @@ evaluate, plot_predicted_traj,  normalise_MVC, mjtg
 
 #%% READ TRAINING DATA AND TRAIN SVM
 
-filename = 'patient_Alessandro'
+filename = 'Alessandro'
 trial_num = '1'
 
 dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a single dataset (imu and emg)
@@ -29,9 +29,7 @@ dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a sin
 # ## Resample Dataset
 
 dataset2 = resample(dataset)
-
 dataset_filtered = filter_smooth(dataset2)
-
 # ## Segment data
 
 traj_segments,trajectory, df_trajectories = segment_data(dataset_filtered, amplitudes)
@@ -49,7 +47,7 @@ extracted_features = extract_features(traj_segments,df_trajectories)
 
 #%% READ AND EXTRACT FEATURES FROM TEST DATA
 
-filename_list = ['patient_Kieran','patient_Adele','patient_Alessandro']
+filename_list = ['Kieran','Adele','Alessandro']
 
 i = 0
 extracted_features_test = {}
@@ -58,7 +56,7 @@ start_angle = {}
 
 for filename in filename_list:
     
-    if filename == 'patient_Kieran':
+    if filename == 'Kieran':
         trial_num_list = ['1','4']
     else:
         trial_num_list = ['1','2']
