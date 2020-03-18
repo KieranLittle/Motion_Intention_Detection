@@ -192,7 +192,7 @@ def filter_smooth(old_dataset):
     
     new_dataset = old_dataset.copy()
     
-    new_dataset['angular position'] = lowpass_filter(new_dataset['time'],new_dataset['imu'],1,2,100)
+    new_dataset['angular position'] = lowpass_filter(new_dataset['time'],new_dataset['imu'],3,2,100)
     
     new_dataset.drop('imu',axis=1,inplace=True)
     
@@ -254,14 +254,14 @@ def segment_data(dataset,amplitudes):
       if (dataset['time'][j] % 8.0 == 0.0) & (dataset['time'][j] != 0.0) & (dataset['time'][j] != 1200.0): #& (dataset['imu'][j] < 5):
           
           # Define initial trajectory
-          trajectory_temp[count] = dataset.iloc[j:j+500,:] #400
+          trajectory_temp[count] = dataset.iloc[j:j+700,:] #400
           #f = trajectory_temp[count].loc[((trajectory_temp[count].iloc[:,-3] > np.max(trajectory_temp[count].iloc[:,-3]-5)))] #& (trajectory_temp[count].iloc[:,-2]>0))] 
                                           
           #trajectory[count] = trajectory_temp[count].iloc[0:f.index[0]]
                  
           # Define the end point of the trajectory:
           #amp_range = trajectory[count].loc[(trajectory[count]['angular position'] > max_amp-5)]
-          end_traj = trajectory_temp[count]
+          end_traj = trajectory_temp[count][(200):]
           
           #diff
           
@@ -278,9 +278,8 @@ def segment_data(dataset,amplitudes):
  
           #         end_amplitude_index = end_traj.index[-1]
               
-          amp_range = end_traj.loc[(end_traj.iloc[:,-2] > 0.1)]#max(end_traj.iloc[:,-3])-1)] 
-          end_amplitude_index = amp_range.index[-1]
-          
+          amp_range = end_traj.loc[(end_traj.iloc[:,-2] < 0.01+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
+          end_amplitude_index = amp_range.index[0]
               
           #amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] #+dataset.iloc[j,-2])]
           
@@ -293,12 +292,18 @@ def segment_data(dataset,amplitudes):
           # z = p>0
           
           #a = trajectory[count].loc[(trajectory[count]['angular velocity'] > 0.01)&(trajectory[count]['angular velocity']>0)]  
-          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,-2] > 0.0)]   #&(trajectory[count]['angular velocity']>0)]  
+          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,-2] > -0.01)]   #&(trajectory[count]['angular velocity']>0)]  
           
           start_amplitude_index = a.index[0]
           
           # Segment trajectory:        
-          trajectory[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]#end_amplitude_index,:]
+          trajectory_temp[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]#end_amplitude_index,:]
+          
+          mean_velocity = np.mean(trajectory_temp[count]['angular velocity'])  
+          start_amplitude_index = start_amplitude_index-int((1/mean_velocity*1))
+          end_amplitude_index = end_amplitude_index+int((1/mean_velocity)*1)
+          
+          trajectory[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]
           
           # Define window:
           b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < 5+trajectory[count].iloc[0,-3])]      #+trajectory[count].iloc[0,-3])]

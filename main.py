@@ -20,7 +20,7 @@ evaluate, plot_predicted_traj,  normalise_MVC, mjtg
 
 #%% READ TRAINING DATA AND TRAIN SVM
 
-filename = 'Alessandro'
+filename = 'Adele'
 trial_num = '1'
 
 dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a single dataset (imu and emg)
@@ -112,31 +112,34 @@ r2score = []
 
 for p in range(0,len(full_combined_trajectories)):
     
-    start = full_combined_trajectories[p].iloc[0,2]
-    end = full_combined_trajectories[p].iloc[-1,2]
+    start = full_combined_trajectories[p].iloc[0,-3]
+    end = full_combined_trajectories[p].iloc[-1,-3]
     time_start_ = full_combined_trajectories[p].iloc[0,0]
     time_end_ = full_combined_trajectories[p].iloc[-1,0]
     
     minimum_jerk_for_comp, vel = mjtg(start, end-start, 100, time_end_-time_start_)  #mjtg(start_angle[p], peak_amplitude[p]+start_angle[p], 101, time_end[p])
     
-    #time = np.linspace(0,time_end[p]-0.01,int(time_end[p]*100))
+    # time = np.linspace(0,time_end_[p]-0.01,int(time_end_[p]*100))
+    time = np.linspace(time_start_,time_end_-0.01,len(minimum_jerk_for_comp))
     
-    # plt.plot(time,minimum_jerk_for_comp[0:len(time)])
-    # plt.plot(time,trajectory[p].iloc[0:len(time),2])
+    # plt.plot(time,minimum_jerk_for_comp)
+    # plt.plot(time,full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),-3])#.iloc[0:len(time),2])
     
-    plt.show()
+    # plt.show()
     
-    coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),2])
+    coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),-3])
     r2score.append(coefficient_of_dermination)
     
-#print(r2score)
+print(r2score)
+
+#%%
 
 filtered_mj_traj = full_combined_trajectories.copy()
 filtered_mj_feat = full_combined_features.copy()
 
 for h in range(0, len(full_combined_trajectories.keys())):
     
-    if r2score[h] < 0.8:
+    if r2score[h] < 0.85:
         del filtered_mj_traj[h]
         filtered_mj_feat.drop([h],inplace=True)
         
