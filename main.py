@@ -130,7 +130,7 @@ for p in range(0,len(full_combined_trajectories)):
     coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),-3])
     r2score.append(coefficient_of_dermination)
     
-print(r2score)
+#print(r2score)
 
 #%%
 

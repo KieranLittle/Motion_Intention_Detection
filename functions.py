@@ -299,9 +299,9 @@ def segment_data(dataset,amplitudes):
           # Segment trajectory:        
           trajectory_temp[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]#end_amplitude_index,:]
           
-          mean_velocity = np.mean(trajectory_temp[count]['angular velocity'])  
-          start_amplitude_index = start_amplitude_index-int((1/mean_velocity*1))
-          end_amplitude_index = end_amplitude_index+int((1/mean_velocity)*1)
+          mean_velocity_temp = np.mean(trajectory_temp[count]['angular velocity'])  
+          start_amplitude_index = start_amplitude_index-int((1/mean_velocity_temp*1))
+          end_amplitude_index = end_amplitude_index+int((1/mean_velocity_temp)*1)
           
           trajectory[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]
           
@@ -733,11 +733,11 @@ def Support_Vector_Regression(df):
     #y.loc['Peak Amplitude'] /= 2
     
     # Split the data into train and test randomly with the test size = 30%, stratify data to split classification evenly
-    X_train, X_test, y_train, y_test = train_test_split(X_org, y, test_size=0.80, random_state=42) #random_state=42
+    X_train, X_test, y_train, y_test = train_test_split(X_org, y, test_size=0.50, random_state=42) #random_state=42
     
-    features_int = ['biceps_max'] #'curr_acc' biceps_max','curr_triceps_change2'] #'curr_acc'
-    X_train_peak_vel = X_train#[features_int]
-    X_test_peak_vel = X_test#[features_int]
+    #features_int = ['biceps_max'] #'curr_acc' biceps_max','curr_triceps_change2'] #'curr_acc'
+    X_train_peak_vel = X_train #[features_int]
+    X_test_peak_vel = X_test #[features_int]
     
     y_train_velocity = y_train.iloc[:,0]
     y_train_time = y_train.iloc[:,1]
@@ -754,7 +754,7 @@ def Support_Vector_Regression(df):
     X_train_scaled = min_max_scaler.fit_transform(X_train_peak_vel)
     X_test_scaled = min_max_scaler.transform(X_test_peak_vel)
     
-    clf = SVR(kernel = 'rbf',C= 100, gamma = 1, epsilon=1,degree=2) # 10,100
+    clf = SVR(kernel = 'linear',C= 1, gamma = 1, epsilon=0.01,degree=2) # 10,100
     clf.fit(X_train_scaled, y_train_velocity)
     
     # Generate predictions for test set
@@ -781,7 +781,7 @@ def Support_Vector_Regression(df):
     # print(df,'\n')
     
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_velocity_predictions)
-    plt.plot([0,200],[0,200],'r',lw=1)
+    #plt.plot([0,200],[0,200],'r',lw=1)
     plt.title('Peak Velocity Prediction')
     
     #plt.scatter(y_test,predictions)
@@ -791,11 +791,11 @@ def Support_Vector_Regression(df):
     from sklearn.model_selection import GridSearchCV 
     
     # Scale the train data to range [0 1] and scale the test data according to the train data
-    #min_max_scaler4 = preprocessing.MinMaxScaler()
-    #X_train_scaled = min_max_scaler4.fit_transform(X_train)
-    #X_test_scaled = min_max_scaler4.transform(X_test)
+    min_max_scaler4 = preprocessing.MinMaxScaler()
+    X_train_scaled = min_max_scaler4.fit_transform(X_train)
+    X_test_scaled = min_max_scaler4.transform(X_test)
     
-    parameters = {'kernel': ('rbf','poly'), 'C':[10,100],'gamma': [1,1e2],'epsilon':[0.5,1.5]}
+    parameters = {'kernel': ['linear'], 'C':[1,10],'gamma': [1,1e2],'epsilon':[0.01]}
 
     svr = SVR() #kernel = 'poly',C=10,gamma=1,epsilon=0.01,degree=3) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
     
@@ -815,7 +815,7 @@ def Support_Vector_Regression(df):
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_mean_vel_predictions)
     plt.title('Mean Velocity Prediction')
-    plt.plot([5,50],[5,50],'r',lw=1)
+    #plt.plot([5,50],[5,50],'r',lw=1)
     
     plt.xlabel('Y Test')
     plt.ylabel('Predicted Y')
