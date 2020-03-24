@@ -139,7 +139,7 @@ filtered_mj_feat = full_combined_features.copy()
 
 for h in range(0, len(full_combined_trajectories.keys())):
     
-    if r2score[h] < 0.85:
+    if r2score[h] < 0.8:
         del filtered_mj_traj[h]
         filtered_mj_feat.drop([h],inplace=True)
         
@@ -161,12 +161,16 @@ filtered_mj_feat_out = filtered_mj_feat[(np.abs(stats.zscore(filtered_mj_feat)) 
 
 #%%
 sns.pairplot(filtered_mj_feat_out)
+#%%
+
+filtered_mj_feat_out.corr()['Mean Velocity'].sort_values()
+
 
 #%%
 
 for traj in range(0,40):
 
-    plt.plot(full_combined_trajectories[traj]['time'], full_combined_trajectories[traj]['angular position'])
+    plt.plot(filtered_mj_traj[traj]['time'], filtered_mj_traj[traj]['angular position'])
     plt.show()
 
 #%%   
