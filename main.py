@@ -16,12 +16,12 @@ import seaborn as sns
 
 from functions import read_file, resample, filter_smooth, segment_data, \
 plot_segments, extract_features, MLR, filteremg, Support_Vector_Regression, plot_traj, predict_values, \
-evaluate, plot_predicted_traj,  normalise_MVC, mjtg
+evaluate, plot_predicted_traj,  normalise_MVC, mjtg, ANN
 
 #%% READ TRAINING DATA AND TRAIN SVM
 
-filename = 'Adele'
-trial_num = '1'
+filename = 'Alessandro'
+trial_num = '2'
 
 dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a single dataset (imu and emg)
 
@@ -48,7 +48,7 @@ extracted_features = extract_features(traj_segments,df_trajectories)
 #%% READ AND EXTRACT FEATURES FROM TEST DATA
 
 filename_list = ['Kieran','Adele','Alessandro']
-
+    
 i = 0
 extracted_features_test = {}
 trajectory_test = {}
@@ -84,7 +84,7 @@ for filename in filename_list:
         extracted_features_test[i] = extract_features(traj_segments_test,df_trajectories_test)
         i = i+1
 
-#%% COMBINE FEATURES AND TRAJECTORY INTO 1 DICTIONARY EACH
+##COMBINE FEATURES AND TRAJECTORY INTO 1 DICTIONARY EACH
         
         
 full_combined_features = extracted_features_test[0].copy()
@@ -104,7 +104,7 @@ for k in range(1,6):
         
         x=x+1
 
-#%% FILTER FEATURES BASED ON MJT R2 SCORE
+## FILTER FEATURES BASED ON MJT R2 SCORE
 
 from sklearn.metrics import r2_score
 
@@ -149,7 +149,7 @@ filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
 
         
 #%%
-sns.pairplot(full_combined_features)
+#sns.pairplot(full_combined_features)
 #sns.pairplot(filtered_mj_feat)
 #filtered_mj_out_feat = filtered_mj_feat.copy()
 
@@ -163,8 +163,9 @@ filtered_mj_feat_out = filtered_mj_feat[(np.abs(stats.zscore(filtered_mj_feat)) 
 sns.pairplot(filtered_mj_feat_out)
 #%%
 
-filtered_mj_feat_out.corr()['Mean Velocity'].sort_values()
+print(abs(filtered_mj_feat_out.corr()['Mean Velocity']).sort_values())
 
+print(abs(filtered_mj_feat_out.corr()['Time at half']).sort_values())
 
 #%%
 
@@ -183,6 +184,20 @@ indices = X_test.index.tolist()
 
 test_trajectories = [filtered_mj_traj[i] for i in filtered_mj_traj.keys() if i in indices] 
 #evaluate(full_combined_features)    
+
+#%% ANN
+
+ANN(filtered_mj_feat_out)
+
+#%%
+
+filtered_mj_feat_out.drop(['Peak Amplitude','Peak Velocity','Mean Velocity','Time at end', 'Time at half'],axis=1)
+
+
+
+
+
+
         
  #%% MAKE PREDICTIONS ON TEST DATA
 
