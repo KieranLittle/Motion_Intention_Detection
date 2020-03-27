@@ -280,7 +280,7 @@ def segment_data(dataset,amplitudes):
  
           #         end_amplitude_index = end_traj.index[-1]
               
-          amp_range = end_traj.loc[(end_traj.iloc[:,-2] < 0.01+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
+          amp_range = end_traj.loc[(end_traj.iloc[:,-2] < 0.1+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
           end_amplitude_index = amp_range.index[0]
               
           #amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] #+dataset.iloc[j,-2])]
@@ -294,7 +294,7 @@ def segment_data(dataset,amplitudes):
           # z = p>0
           
           #a = trajectory[count].loc[(trajectory[count]['angular velocity'] > 0.01)&(trajectory[count]['angular velocity']>0)]  
-          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,-2] > -0.01)]   #&(trajectory[count]['angular velocity']>0)]  
+          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,-2] > 0.0)]   #&(trajectory[count]['angular velocity']>0)]  
           
           start_amplitude_index_temp = a.index[0]
           
@@ -309,9 +309,14 @@ def segment_data(dataset,amplitudes):
           
           # Define window:
           
-          b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < 0.5*(np.max(trajectory[count].iloc[:,-3])-trajectory[count].iloc[0,-3]))]      #+trajectory[count].iloc[0,-3])] : 0.25*(trajectory[count].iloc[-1,-3]-trajectory[count].iloc[-1,-3]
-          
-          traj_segment[count] = dataset.iloc[start_amplitude_index:b.index[-1],:] 
+          try:
+              b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < 0.25*((trajectory[count].iloc[-1,-3])-(trajectory[count].iloc[0,-3])))]      #+trajectory[count].iloc[0,-3])] : 0.25*(trajectory[count].iloc[-1,-3]-trajectory[count].iloc[-1,-3]
+              traj_segment[count] = dataset.iloc[start_amplitude_index:b.index[-1],:] 
+          except:
+              b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < 5+(trajectory[count].iloc[0,-3]))]
+              traj_segment[count] = dataset.iloc[start_amplitude_index:b.index[-1],:] 
+              print('error')
+            
           
           # Measure variables that define the trajectory: 
           
