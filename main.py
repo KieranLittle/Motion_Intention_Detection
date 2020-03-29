@@ -20,7 +20,7 @@ evaluate, plot_predicted_traj,  normalise_MVC, mjtg, ANN
 
 #%% READ TRAINING DATA AND TRAIN SVM
 
-filename = 'Alessandro'
+filename = 'Kieran'
 trial_num = '1'
 
 dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a single dataset (imu and emg)
