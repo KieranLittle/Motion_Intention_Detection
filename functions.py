@@ -318,7 +318,7 @@ def segment_data(dataset,amplitudes):
           amplitude_change.append(amplitude_change_)
           
           
-          b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < (start_amplitude + 0.4*(amplitude_change_)))]      #+trajectory[count].iloc[0,-3])] : 0.25*(trajectory[count].iloc[-1,-3]-trajectory[count].iloc[-1,-3]
+          b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < (start_amplitude + 10))]#0.05*(amplitude_change_)))]      #+trajectory[count].iloc[0,-3])] : 0.25*(trajectory[count].iloc[-1,-3]-trajectory[count].iloc[-1,-3]
           traj_segment[count] = dataset.iloc[start_amplitude_index:b.index[-1],:] 
             
           
@@ -530,6 +530,8 @@ def extract_features(segments, df):
   deltoid_min = []
   
   segment_duration = []
+  features_df = pd.DataFrame()
+  
 
   for segment_number in range(0,len(segments)):
       
@@ -588,6 +590,24 @@ def extract_features(segments, df):
       pecs_sum.append(segments[segment_number]['pecs'].sum())
       #pecs_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,6],1)/0.01))
      
+      """ 
+      Define segment length, split into 6 evenly spaced points
+      Features of each point for each sensor (6):
+        1. time
+        2. position
+        3. velocity 
+        4. acceleration
+        = 24 features
+      """
+    
+      segments[segment_number]['time'] = np.round([i - segments[segment_number]['time'].iloc[0] for i in segments[segment_number]['time']],2)
+    
+      segment_length = len(segments[segment_number]) # in samples
+      indicies = np.round(np.linspace(0,segment_length-1, 6)).astype(int)
+      features_df_single = pd.DataFrame(np.array(segments[segment_number].iloc[indicies,:]).ravel())
+      features_df_single = features_df_single.T  
+      features_df = features_df.append(features_df_single)
+        
   dict = {'curr_triceps_change2': curr_triceps_change2, 'curr_biceps_change2': curr_biceps_change2,\
           'triceps_min':triceps_min, 'triceps_max':triceps_max,'pecs_sum':pecs_sum,\
           'biceps_sum':biceps_sum,'biceps_max':biceps_max, 'biceps_min':biceps_min, \
@@ -601,18 +621,20 @@ def extract_features(segments, df):
       #'window_max_velocity':velocity_max, 'curr_velocity':curr_velocity, 'curr_acc':curr_acc, 'biceps_diff':biceps_diff, 'imu_diff':imu_diff, 'biceps_min':biceps_min, 'biceps_min_time':biceps_min_time } #{'biceps_sum':biceps_sum, 'biceps_max':biceps_max, 'biceps_gradient':biceps_gradient, 'triceps_gradient':triceps_gradient,'stretch_gradient':stretch_gradient, 'imu_diff':imu_diff, 'curr_velocity':curr_velocity, 'curr_acc':curr_acc }
       #'deltoid_gradient':deltoid_gradient, 'pecs_gradient':pecs_gradient, 'imu_max':imu_max, 'stretch_gradient':stretch_gradient,'stretch_max':stretch_max} # 'stretch_gradient':stretch_gradient, 'window_max_velocity':velocity_max'stretch_gradient':stretch_gradient 'imu_diff':imu_diff 'window_max_velocity':velocity_max}  #'stretch_diff':stretch_gradient #stretch_diff':stretch_diff} #'velocity_max':velocity_max, 'biceps_max':biceps_max, 'triceps_diff':triceps_diff, 'deltoid_diff':deltoid_diff 'velocity_max':velocity_max 'stretch_diff':stretch_diff,'imu_diff':imu_diff,  'triceps_sum':triceps_sum,'deltoid_sum':deltoid_sum,'pecs_sum':pecs_sum,'amplitude':amplitude}
       
-  df2 = pd.DataFrame(dict) 
+  #df2 = pd.DataFrame(dict) 
+  df2 = features_df
       
     #df2['End Window Time'] = time_3degrees
        
     #df['peak_segment_velocity'] = peak_segment_velocity
-  df2['Peak Amplitude'] = df['amplitude_change']
-  df2['Peak Velocity'] = df['peak_velocity'] 
-  df2['Mean Velocity'] = df['mean_velocity']
+  df2['Peak Amplitude'] = np.array(df['amplitude_change'])
+  df2['Peak Velocity'] = np.array(df['peak_velocity'])
+  df2['Mean Velocity'] = np.array(df['mean_velocity'])
     
     #df['Time at half traj'] = time_half
-  df2['Time at end'] = df['time_end']
-  df2['Time at half'] = df['time_half']
+  df2['Time at end'] = np.array(df['time_end'])
+  df2['Time at half'] = np.array(df['time_half'])
+  df2 = df2.reset_index(drop=True)
       
     #df2 = df2[(np.abs(stats.zscore(df2)) < 2).all(axis=1)]
     
@@ -768,6 +790,7 @@ def Support_Vector_Regression(df):
     # Show cross-val results
     #print(confusion_matrix(y_test,predictions))
     #print(classification_report(y_test,predictions))
+    from sklearn.metrics import r2_score
     
     print('Peak Velocity')
     print('MAE:', metrics.mean_absolute_error(y_test_velocity, velocity_predictions))
@@ -775,6 +798,8 @@ def Support_Vector_Regression(df):
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_velocity, velocity_predictions)))
     print('% Error: ', 100*metrics.mean_absolute_error(y_test_velocity, velocity_predictions)/np.mean(y_test_velocity))
     print('Score:', clf.score(X_test_scaled,velocity_predictions),'\n')
+    print('R2 Score:', r2_score(y_test_velocity, velocity_predictions),'\n')
+    
     #print(classification_report(y_test_velocity, velocity_predictions))
     
     # print('Coefficients: ')
@@ -794,24 +819,24 @@ def Support_Vector_Regression(df):
     #%%%%%%%%%%% MEAN VEL %%%%%%%%%%%%%%
     from sklearn.model_selection import GridSearchCV 
     
-    features_int = ['biceps_max','biceps_sum','curr_acc','curr_velocity','triceps_min', 'curr_triceps_change2', 'pecs_sum']# 'segment_duration' 'triceps_max','pecs_sum','curr_triceps_change2'\
+    #features_int = ['biceps_max','biceps_sum','curr_acc','curr_velocity','triceps_min', 'curr_triceps_change2', 'pecs_sum','segment_duration'] #'triceps_max','pecs_sum','curr_triceps_change2'\
                    # ,'biceps_sum', 'deltoid_sum'] #'curr_acc'
     
-    print('Features used: ',features_int)
-    X_train_mean_vel = X_train[features_int]
-    X_test_mean_vel = X_test[features_int]
+    # print('Features used: ',features_int)
+    # X_train_mean_vel = X_train[features_int]
+    # X_test_mean_vel = X_test[features_int]
     
     # Scale the train data to range [0 1] and scale the test data according to the train data
     min_max_scaler4 = preprocessing.MinMaxScaler()
-    X_train_scaled = min_max_scaler4.fit_transform(X_train_mean_vel)
-    X_test_scaled = min_max_scaler4.transform(X_test_mean_vel)
+    X_train_scaled = min_max_scaler4.fit_transform(X_train)
+    X_test_scaled = min_max_scaler4.transform(X_test)
     
     parameters = {'kernel': ['rbf'], 'C':[1,10,100,1000],'gamma': [10,1,1e2],'epsilon':[0.01,0.1,1,10]}
 
-    svr = SVR() #kernel = 'poly',C=10,gamma=1,epsilon=0.01,degree=3) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
+    svr2 = SVR() #kernel = 'poly',C=10,gamma=1,epsilon=0.01,degree=3) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
     
     #clf4 = SVR('rbf',C= 100, gamma = 1, epsilon=0.1,degree=2)
-    clf4 = GridSearchCV(svr, parameters)
+    clf4 = GridSearchCV(svr2, parameters)
     
     clf4.fit(X_train_scaled,y_train_mean_vel)
     
@@ -826,10 +851,16 @@ def Support_Vector_Regression(df):
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_mean_vel_predictions)
     plt.title('Mean Velocity Prediction')
-    plt.plot([5,50],[5,50],'r',lw=1)
+    #plt.plot([5,50],[5,50],'r',lw=1)
+    a = min(y_test_mean_vel)
+    b = max(y_test_mean_vel)
     
-    plt.xlabel('Y Test')
-    plt.ylabel('Predicted Y')
+    plt.plot([a,b],[a,b],'r',lw=1)
+    plt.legend(['Predicted Correlation','Real Correlation'])
+    
+    plt.xlabel('True Mean Velocity (degrees/s)')
+    plt.ylabel('Predicted Mean Velocity (degrees/s)')
+    plt.savefig("mean_vel_40%.svg",format='svg')
     plt.show()
     
     print('Mean Velocity')
@@ -839,32 +870,35 @@ def Support_Vector_Regression(df):
     print('% Error: ', 100*metrics.mean_absolute_error(y_test_mean_vel, mean_vel_predictions)/np.mean(y_test_mean_vel))
     print('Coefficients: ')
     print('Score:', clf4.score(X_test_scaled,mean_vel_predictions),'\n')
-    
-    
+    print('R2 Score:', r2_score(y_test_mean_vel, mean_vel_predictions),'\n')
     
     #%%############# DURATION ###################
     
     
-    features_int2 = ['biceps_max', 'biceps_sum','biceps_min','curr_acc','curr_velocity','triceps_min', 'pecs_sum']#'segment_duration' 'triceps_max','pecs_sum','curr_triceps_change2'\
-                   # ,'biceps_sum', 'deltoid_sum'] #'curr_acc'
+    # features_int2 = ['biceps_max', 'biceps_sum','biceps_min','curr_acc','curr_velocity','triceps_min', 'pecs_sum','segment_duration']# 'triceps_max','pecs_sum','curr_triceps_change2'\
+    #                # ,'biceps_sum', 'deltoid_sum'] #'curr_acc'
     
-    print('Features used: ',features_int2)
-    X_train_dur = X_train[features_int2]
-    X_test_dur = X_test[features_int2]
+    # print('Features used: ',features_int2)
+    # X_train_dur = X_train[features_int2]
+    # X_test_dur = X_test[features_int2]
+    
+    # X_train_dur['Predicted Mean Velocity'] = clf4.predict(X_train_scaled)
+    # X_test_dur['Predicted Mean Velocity'] = clf4.predict(X_test_scaled)
     
     # Scale the train data to range [0 1] and scale the test data according to the train data
-    min_max_scaler2 = preprocessing.MinMaxScaler()
-    X_train_scaled = min_max_scaler2.fit_transform(X_train_dur)
-    X_test_scaled = min_max_scaler2.transform(X_test_dur)
+    # min_max_scaler2 = preprocessing.MinMaxScaler()
+    # X_train_scaled = min_max_scaler2.fit_transform(X_train)
+    # X_test_scaled = min_max_scaler2.transform(X_test)
+    
     
     parameters = {'kernel': ['rbf'], 'C':[0.01,1,10,100],'gamma': [0.01,0.1,1,10],'epsilon':[0.01,0.1,1]}
 
-    svr = SVR()   #clf2 = SVR(kernel = 'rbf',C=100,gamma=1,epsilon=0.1,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
+    svr3 = SVR()   #clf2 = SVR(kernel = 'rbf',C=100,gamma=1,epsilon=0.1,degree=1) # 'rbf',C= 1000, gamma = 0.01, epsilon=0.01,degree=2) #100,1000,10,1
     
-    clf2 = GridSearchCV(svr, parameters)
+    clf2 = GridSearchCV(svr3, parameters)
     
     clf2.fit(X_train_scaled,y_train_time)
-      
+    
     print(clf2.best_params_)
     
     # The coefficients
@@ -876,10 +910,13 @@ def Support_Vector_Regression(df):
     #plt.scatter(y_test,predictions)
     sns.lmplot(x= 'y_test',y = 'predictions', data = df_time_predictions)
     plt.title('Duration Prediction')
-    plt.plot([0.5,2.5],[0.5,2.5],'r',lw=1)
     
-    plt.xlabel('Y Test')
-    plt.ylabel('Predicted Y')
+    plt.plot([0.56,2.08],[0.56,2.08],'r',lw=1)
+    plt.legend(['Predicted Correlation','Real Correlation'])
+    
+    plt.xlabel('True Trajectory Duration (s)')
+    plt.ylabel('Predicted Trajectory Duration (s)')
+    plt.savefig("duration_40%.svg",format='svg')
     plt.show()
     
     print('Duration')
@@ -888,6 +925,7 @@ def Support_Vector_Regression(df):
     print('RMSE:', np.sqrt(metrics.mean_squared_error(y_test_time, time_predictions)))
     print('% Error: ', 100*metrics.mean_absolute_error(y_test_time, time_predictions)/np.mean(y_test_time))
     print('Score:', clf2.score(X_test_scaled,time_predictions),'\n')
+    print('R2 Score:', r2_score(y_test_time, time_predictions),'\n')
     
     # print('Coefficients: ')
     # #pd.set_option('display.max_columns', df.shape[1]+1)
@@ -968,7 +1006,7 @@ def Support_Vector_Regression(df):
     # X_test2['amplitude_predictions'] = amplitude_predictions
     X_test2['mean_vel_predictions'] = mean_vel_predictions
     
-    return X_test2,y_test
+    return X_train, X_train_scaled, y_train, X_test2,y_test, clf4, clf2
     
 def predict_values(dataset,clf,clf2,min_max_scaler, min_max_scaler2):
     
@@ -1061,19 +1099,21 @@ def plot_predicted_traj(df_predictions_SVM,trajectory):
     import matplotlib.pyplot as plt
     
     
-    for segment_num in range(40,80):
+    for segment_num in range(30,31):
     
-        current = trajectory[segment_num].iloc[0,2]
-        setpoint = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-3]*df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]
+        current = trajectory[segment_num].iloc[0,-3]
+        #setpoint = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-3]*df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]
+        setpoint = df_predictions_SVM.iloc[segment_num,-1]*df_predictions_SVM.iloc[segment_num,-2]*2
+        
         frequency = 100
-        time = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-3]#(df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]-current)/df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-2]
+        time = df_predictions_SVM.iloc[segment_num,-2]*2#(df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]-current)/df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-2]
         
         traj1, traj_vel = mjtg(current, setpoint, frequency, time)
         
         traj = np.array(traj1)
         #time_ = np.where(traj < 5)[-1][0]
         
-        end_segment_point = trajectory[segment_num].iloc[0,2]+5.0
+        end_segment_point = trajectory[segment_num].iloc[0,-3]+32.0
         
         traj = traj[traj>end_segment_point]
     
@@ -1082,7 +1122,7 @@ def plot_predicted_traj(df_predictions_SVM,trajectory):
         
         xaxis = np.linspace(0.0,6.0,601)
         
-        index_ = trajectory[segment_num].loc[(trajectory[segment_num]['imu'] > end_segment_point)].index[0]- trajectory[segment_num].index[0]
+        index_ = trajectory[segment_num].loc[(trajectory[segment_num]['angular position'] > end_segment_point)].index[0]- trajectory[segment_num].index[0]
         
     #    if len(traj) > len(trajectory[segment_num]):
     #        traj = traj[0:len(trajectory[segment_num])]
@@ -1091,7 +1131,7 @@ def plot_predicted_traj(df_predictions_SVM,trajectory):
         
         plt.figure(1,figsize=(5,5))
         plt.plot(xaxis[index_:len(traj)+index_], traj)
-        plt.plot(xaxis[0:len(trajectory[segment_num].iloc[:,2])], trajectory[segment_num].iloc[:,2])
+        plt.plot(xaxis[0:len(trajectory[segment_num].iloc[:,-3])], trajectory[segment_num].iloc[:,-3])
         
         #plt.plot(xaxis, traj_vel)
         plt.title("Minimum jerk trajectory")
@@ -1099,7 +1139,7 @@ def plot_predicted_traj(df_predictions_SVM,trajectory):
         plt.ylim(0,100)
         plt.ylabel("Angle [deg]")
         plt.legend(['Predicted', 'Real'])
-        
+        plt.savefig('predicted_and_real_traj_40%.svg', format='svg')
     #    plt.figure(2)
     #    plt.plot(trajectory[segment_num]['time'],trajectory[segment_num]['imu'])
     #    

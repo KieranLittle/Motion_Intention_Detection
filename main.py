@@ -40,10 +40,13 @@ plot_segments(traj_segments, df_trajectories['amplitude_change'], df_trajectorie
 
 extracted_features = extract_features(traj_segments,df_trajectories)
 
+
+
 # Training
 
 # print('------------Support Vector Regression----------------\n')
 # clf,clf2,min_max_scaler, min_max_scaler2 = Support_Vector_Regression(extracted_features)
+X_test,y_test = Support_Vector_Regression(extracted_features)
 
 #%% READ AND EXTRACT FEATURES FROM TEST DATA
 
@@ -147,22 +150,17 @@ filtered_mj_feat = filtered_mj_feat.reset_index(drop = True)
 
 filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
 
-        
-#%%
-#sns.pairplot(full_combined_features)
-#sns.pairplot(filtered_mj_feat)
-#filtered_mj_out_feat = filtered_mj_feat.copy()
 
-#%% REMOVE OUTLIERS
+# REMOVE OUTLIERS
 
-filtered_mj_feat_out = filtered_mj_feat[(np.abs(stats.zscore(filtered_mj_feat)) < 3).all(axis=1)]
-
+#filtered_mj_feat_out = filtered_mj_feat[(np.abs(stats.zscore(filtered_mj_feat)) < 3).all(axis=1)]
+filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
 #### Remove from trajectories as well!
 
 #%%
 sns.pairplot(filtered_mj_feat_out)
 #%%
-
+ 
 print(abs(filtered_mj_feat_out.corr()['Mean Velocity']).sort_values())
 
 print(abs(filtered_mj_feat_out.corr()['Time at half']).sort_values())
@@ -172,12 +170,279 @@ print(abs(filtered_mj_feat_out.corr()['Time at half']).sort_values())
 for traj in range(0,40):
 
     plt.plot(filtered_mj_traj[traj]['time'], filtered_mj_traj[traj]['angular position'])
+    
     plt.show()
 
+#%%
+
+ plt.plot(filtered_mj_traj[32]['time'], filtered_mj_traj[32]['angular position'])
+    
+    
 #%%   
 
+
+# Outlier detection 
+
+def detect_outliers(df,n,features):
+    """
+    Takes a dataframe df of features and returns a list of the indices
+    corresponding to the observations containing more than n outliers according
+    to the Tukey method.
+    """
+    outlier_indices = []
+    
+    # iterate over features(columns)
+    for col in features:
+        # 1st quartile (25%)
+        Q1 = np.percentile(df[col], 25)
+        # 3rd quartile (75%)
+        Q3 = np.percentile(df[col],75)
+        # Interquartile range (IQR)
+        IQR = Q3 - Q1
+        
+        # outlier step
+        outlier_step = 1.5 * IQR
+        
+        # Determine a list of indices of outliers for feature col
+        outlier_list_col = df[(df[col] < Q1 - outlier_step) | (df[col] > Q3 + outlier_step )].index
+        
+        # append the found outlier indices for col to the list of outlier indices 
+        outlier_indices.extend(outlier_list_col)
+        
+    # select observations containing more than 2 outliers
+    outlier_indices = Counter(outlier_indices)        
+    multiple_outliers = list( k for k, v in outlier_indices.items() if v > n )
+    
+    return multiple_outliers   
+
+lst = []
+cols = [i for i in range(0,len(filtered_mj_feat.columns)+1)]
+Outliers_to_drop = detect_outliers(filtered_mj_feat,5,list(filtered_mj_feat.columns.values))
+
+filtered_mj_feat_out = filtered_mj_feat.drop(Outliers_to_drop, axis = 0).reset_index(drop=True)
+
+
+#%%
+
 #clf,clf2,min_max_scaler, min_max_scaler2 
-X_test,y_test = Support_Vector_Regression(filtered_mj_feat_out)      
+X_train, X_train_scaled, y_train, X_test,y_test,clf4,clf2 = Support_Vector_Regression(filtered_mj_feat_out) #filtered_mj_feat_out
+
+from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve
+
+# kfold = StratifiedKFold(n_splits=10)
+# cross_val_score(clf4, X_train, y_train['Mean Velocity'], scoring='neg_mean_absolute_error',cv = 10,n_jobs=4)
+
+#%%
+
+from collections import Counter
+
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, GradientBoostingRegressor, ExtraTreesRegressor, VotingRegressor
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.neural_network import MLPRegressor
+#from sklearn.svm import SVC
+from sklearn.svm import SVR
+from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve, KFold
+from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
+
+#S = SVR(C=10, gamma = 1, kernel = 'rbf')
+
+random_state = 2
+classifiers = []
+classifiers.append(clf4)
+classifiers.append(SVR())
+classifiers.append(DecisionTreeRegressor())
+classifiers.append(AdaBoostRegressor(DecisionTreeRegressor(),learning_rate=0.1))
+classifiers.append(RandomForestRegressor())
+classifiers.append(ExtraTreesRegressor())
+classifiers.append(GradientBoostingRegressor())
+classifiers.append(MLPRegressor())
+classifiers.append(ElasticNetCV())
+classifiers.append(LassoCV())
+classifiers.append(RidgeCV())
+
+# classifiers.append(KNeighborsClassifier())
+#classifiers.append(LogisticRegression())
+#classifiers.append(LinearDiscriminantAnalysis())
+
+kfolds = KFold(n_splits=8, shuffle=True, random_state=42)
+
+cv_results = []
+for classifier in classifiers :
+    cv_results.append(-cross_val_score(classifier, X_train_scaled, y_train['Mean Velocity'].values, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=4))
+
+cv_means = []
+cv_std = []
+for cv_result in cv_results:
+    cv_means.append(cv_result.mean())
+    cv_std.append(cv_result.std())
+
+cv_res = pd.DataFrame({"CrossValMeans":cv_means,"CrossValerrors": cv_std,"Algorithm":["SVC1","SVC2","DecisionTree","AdaBoost",
+"RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNetCV","LassoCV","RidgeCV"]})
+
+g = sns.barplot("CrossValMeans","Algorithm",data = cv_res.sort_values('CrossValMeans'), palette="Set3",orient = "h",**{'xerr':cv_std})
+g.set_xlabel("Mean Error")
+g = g.set_title("Cross validation scores")
+
+
+#%%
+
+random_state = 2
+classifiers = []
+classifiers.append(clf2)
+classifiers.append(SVR())
+classifiers.append(DecisionTreeRegressor())
+classifiers.append(AdaBoostRegressor(DecisionTreeRegressor(),learning_rate=0.1))
+classifiers.append(RandomForestRegressor())
+classifiers.append(ExtraTreesRegressor())
+classifiers.append(GradientBoostingRegressor())
+classifiers.append(MLPRegressor())
+classifiers.append(ElasticNetCV())
+classifiers.append(LassoCV())
+classifiers.append(RidgeCV())
+
+# classifiers.append(KNeighborsClassifier())
+#classifiers.append(LogisticRegression())
+#classifiers.append(LinearDiscriminantAnalysis())
+
+kfolds = KFold(n_splits=8, shuffle=True, random_state=42)
+
+cv_results = []
+for classifier in classifiers :
+    cv_results.append(-cross_val_score(classifier, X_train_scaled, y_train['Time at half'].values, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=4))
+
+cv_means = []
+cv_std = []
+for cv_result in cv_results:
+    cv_means.append(cv_result.mean())
+    cv_std.append(cv_result.std())
+
+cv_res = pd.DataFrame({"CrossValMeans":cv_means,"CrossValerrors": cv_std,"Algorithm":["SVC1","SVC2","DecisionTree","AdaBoost",
+"RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNetCV","LassoCV","RidgeCV"]})
+
+g = sns.barplot("CrossValMeans","Algorithm",data = cv_res.sort_values('CrossValMeans'), palette="Set3",orient = "h",**{'xerr':cv_std})
+g.set_xlabel("Mean Error")
+g = g.set_title("Cross validation scores")
+
+#%%
+from sklearn.model_selection import RandomizedSearchCV
+# Number of trees in random forest
+n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
+# Number of features to consider at every split
+max_features = ['auto', 'sqrt']
+# Maximum number of levels in tree
+max_depth = [int(x) for x in np.linspace(10, 110, num = 11)]
+max_depth.append(None)
+# Minimum number of samples required to split a node
+min_samples_split = [2, 5, 10]
+# Minimum number of samples required at each leaf node
+min_samples_leaf = [1, 2, 4]
+# Method of selecting samples for training each tree
+bootstrap = [True, False]
+# Create the random grid
+random_grid = {
+    # 'n_estimators': n_estimators,
+#                'max_features': max_features,
+#                'max_depth': max_depth,
+#                'min_samples_split': min_samples_split,
+#                'min_samples_leaf': min_samples_leaf,
+#                'bootstrap': bootstrap
+                   'bootstrap': [True],
+    'max_depth': [80, 90, 100, 110],
+    'max_features': [2, 3],
+    'min_samples_leaf': [3, 4, 5],
+    'min_samples_split': [8, 10, 12],
+    'n_estimators': [100, 200, 300, 1000]
+               
+               }
+
+# Use the random grid to search for best hyperparameters
+# First create the base model to tune
+rf = RandomForestRegressor()
+# Random search of parameters, using 3 fold cross validation, 
+# search across 100 different combinations, and use all available cores
+rf_random = RandomizedSearchCV(estimator = rf, param_distributions = random_grid, n_iter = 100, cv = 3, verbose=2, random_state=42, n_jobs = 1)
+# Fit the random search model
+rf_random.fit(X_train, y_train['Mean Velocity'])
+
+RF_best =  rf_random.best_estimator_.feature_importances_
+
+#%%
+#columns = time, stretch1, BB1, TB1, AD1, P1, Pos1,Vel1, acc1 
+-cross_val_score(rf_random.best_estimator_, X_train_scaled, y_train['Mean Velocity'].values, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=1)
+
+
+lst = []
+
+for i in range(1,7):
+    lst.append('time{}'.format(i))
+    lst.append('stretch{}'.format(i))
+    lst.append('BB{}'.format(i))
+    lst.append('TB{}'.format(i))
+    lst.append('AD{}'.format(i))
+    lst.append('PC{}'.format(i))
+    lst.append('Pos{}'.format(i))
+    lst.append('Vel{}'.format(i))
+    lst.append('Acc{}'.format(i))
+
+series = pd.Series(lst)
+indices = np.argsort(RF_best)[::-1][:20]
+
+g = sns.barplot(y = series[indices], x = RF_best[indices])
+
+#%%
+### META MODELING  WITH ADABOOST, RF, EXTRATREES and GRADIENTBOOSTING
+
+# Adaboost
+DTR = DecisionTreeRegressor()
+
+adaDTR = AdaBoostClassifier(DTR) #random_state=7)
+
+ada_param_grid = {
+              'n_estimators': (1, 2),
+              'base_estimator__max_depth': (1, 2),
+              'algorithm': ('SAMME', 'SAMME.R')}
+
+gsadaDTR = GridSearchCV(adaDTR,param_grid = ada_param_grid, cv=kfolds, scoring="neg_mean_absolute_error", verbose = 1)
+
+gsadaDTR.fit(X_train,y_train['Mean Velocity'])
+
+ada_best = gsadaDTR.best_estimator_
+
+
+
+
+#%%
+
+nrows = ncols = 2
+fig, axes = plt.subplots(nrows = nrows, ncols = ncols, sharex="all", figsize=(15,15))
+
+ada_best = 
+ExtC_best = 
+RFC_best = 
+GBC_best = 
+
+
+names_classifiers = [("AdaBoosting", ada_best),("ExtraTrees",ExtC_best),("RandomForest",RFC_best),("GradientBoosting",GBC_best)]
+
+nclassifier = 0
+for row in range(nrows):
+    for col in range(ncols):
+        name = names_classifiers[nclassifier][0]
+        classifier = names_classifiers[nclassifier][1]
+        indices = np.argsort(classifier.feature_importances_)[::-1][:40]
+        g = sns.barplot(y=X_train.columns[indices][:40],x = classifier.feature_importances_[indices][:40] , orient='h',ax=axes[row][col])
+        g.set_xlabel("Relative importance",fontsize=12)
+        g.set_ylabel("Features",fontsize=12)
+        g.tick_params(labelsize=9)
+        g.set_title(name + " feature importance")
+        nclassifier += 1
+
+
+
+#%%
 
 #full_combined_trajectories_test = full_combined_trajectories[full_combined_trajectories.keys()==X_test.index]
 indices = X_test.index.tolist()
@@ -193,11 +458,6 @@ ANN(filtered_mj_feat_out)
 
 filtered_mj_feat_out.drop(['Peak Amplitude','Peak Velocity','Mean Velocity','Time at end', 'Time at half'],axis=1)
 
-
-
-
-
-
         
  #%% MAKE PREDICTIONS ON TEST DATA
 
@@ -211,12 +471,27 @@ filtered_mj_feat_out.drop(['Peak Amplitude','Peak Velocity','Mean Velocity','Tim
     
 #evaluate(df_predictions_SVM)    
 
+#%%
+
+current = test_trajectories[0].iloc[0,-3]
+#setpoint = df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-3]*df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]#df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]
+setpoint = X_test.iloc[0,-1]*X_test.iloc[0,-2]*2
+
+frequency = 100
+time =X_test.iloc[0,-2]*2#(df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-1]-current)/df_predictions_SVM.iloc[segment_num,len(df_predictions_SVM.T)-2]
+        
+traj1, traj_vel = mjtg(current, setpoint, frequency, time)
+
+plt.plot(traj1)
 
 #%% PLOT PREDICTED TRAJECTORIES
 
 plot_predicted_traj(X_test,test_trajectories) #df_predictions_SVM
- 
+#plt.savefig('predicted_and_real_traj_40%.svg', format='svg')
 
+#%%
+plt.plot(test_trajectories[30]['time'], test_trajectories[30]['angular position'])
+plt.savefig('real_traj_40%.svg', format='svg')
 
 #%% EXAMPLE JERK TRAJECTORY
 
