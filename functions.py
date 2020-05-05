@@ -6,6 +6,10 @@ Created on Thu Jan 30 13:17:40 2020
 @author: Kieran
 """
 
+import numpy as np
+from collections import Counter
+from sklearn import preprocessing
+
 def read_file(filename, trial_num):
     
     import pandas as pd
@@ -1263,8 +1267,90 @@ def ANN(df):
     
     return 
     
+    # Outlier detection 
+
+def detect_outliers(df,n,features):
     
+    """
+    Takes a dataframe df of features and returns a list of the indices
+    corresponding to the observations containing more than n outliers according
+    to the Tukey method.
+    """
+    outlier_indices = []
     
+    # iterate over features(columns)
+    for col in features:
+        # 1st quartile (25%)
+        Q1 = np.percentile(df[col], 25)
+        # 3rd quartile (75%)
+        Q3 = np.percentile(df[col],75)
+        # Interquartile range (IQR)
+        IQR = Q3 - Q1
+        
+        # outlier step
+        outlier_step = 1.5 * IQR
+        
+        # Determine a list of indices of outliers for feature col
+        outlier_list_col = df[(df[col] < Q1 - outlier_step) | (df[col] > Q3 + outlier_step )].index
+        
+        # append the found outlier indices for col to the list of outlier indices 
+        outlier_indices.extend(outlier_list_col)
+        
+    # select observations containing more than 2 outliers
+    outlier_indices = Counter(outlier_indices)        
+    multiple_outliers = list( k for k, v in outlier_indices.items() if v > n )
+    
+    return multiple_outliers 
+    
+
+def baseline_regression_models(X_train, y_train, kfolds=0, n_jobs=1):
+
+    from collections import Counter
+    from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, GradientBoostingRegressor, ExtraTreesRegressor, VotingRegressor
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.tree import DecisionTreeRegressor
+    from sklearn.neural_network import MLPRegressor
+    from sklearn.svm import SVR
+    from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve, KFold
+    from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
+    import pandas as pd
+    import seaborn as sns
+    
+    classifiers = []
+    classifiers.append(SVR())
+    classifiers.append(DecisionTreeRegressor())
+    classifiers.append(AdaBoostRegressor(DecisionTreeRegressor(),learning_rate=0.1))
+    classifiers.append(RandomForestRegressor())
+    classifiers.append(ExtraTreesRegressor())
+    classifiers.append(GradientBoostingRegressor())
+    classifiers.append(MLPRegressor())
+    classifiers.append(ElasticNetCV())
+    classifiers.append(LassoCV())
+    classifiers.append(RidgeCV())
+    
+    if kfolds ==0:
+        kfolds = KFold(n_splits=8, shuffle=True, random_state=42)
+    
+    cv_results = []
+    for classifier in classifiers :
+        cv_results.append(-cross_val_score(classifier, X_train, y_train.values, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))
+    
+    cv_means = []
+    cv_std = []
+    for cv_result in cv_results:
+        cv_means.append(cv_result.mean())
+        cv_std.append(cv_result.std())
+    
+    cv_res = pd.DataFrame({"CrossValMeans":cv_means,"CrossValerrors": cv_std,"Algorithm":["SVR","DecisionTree","AdaBoost",
+    "RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNetCV","LassoCV","RidgeCV"]})
+    
+    g = sns.barplot("CrossValMeans","Algorithm",data = cv_res.sort_values('CrossValMeans'), palette="Set3",orient = "h",**{'xerr':cv_std})
+    g.set_xlabel("Mean Error")
+    g = g.set_title("Cross validation scores")
+
+    return cv_res.sort_values('CrossValMeans')
 
 
 

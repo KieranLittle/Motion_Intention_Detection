@@ -14,9 +14,15 @@ import pickle
 from scipy import stats
 import seaborn as sns   
 
-from functions import read_file, resample, filter_smooth, segment_data, \
-plot_segments, extract_features, MLR, filteremg, Support_Vector_Regression, plot_traj, predict_values, \
-evaluate, plot_predicted_traj,  normalise_MVC, mjtg, ANN
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+from sklearn.svm import SVR
+
+from functions import *
+
+# read_file, resample, filter_smooth, segment_data, \
+# plot_segments, extract_features, MLR, filteremg, Support_Vector_Regression, plot_traj, predict_values, \
+# evaluate, plot_predicted_traj,  normalise_MVC, mjtg, ANN, detect_outliers
 
 #%% READ TRAINING DATA AND TRAIN SVM
 
@@ -26,11 +32,13 @@ trial_num = '1'
 dataset, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a single dataset (imu and emg)
 
 #%%
-# ## Resample Dataset
+
+"""
+Single dataset for testing
+"""
 
 dataset2 = resample(dataset)
 dataset_filtered = filter_smooth(dataset2)
-# ## Segment data
 
 traj_segments,trajectory, df_trajectories = segment_data(dataset_filtered, amplitudes)
 
@@ -40,8 +48,6 @@ plot_segments(traj_segments, df_trajectories['amplitude_change'], df_trajectorie
 
 extracted_features = extract_features(traj_segments,df_trajectories)
 
-
-
 # Training
 
 # print('------------Support Vector Regression----------------\n')
@@ -49,6 +55,11 @@ extracted_features = extract_features(traj_segments,df_trajectories)
 X_test,y_test = Support_Vector_Regression(extracted_features)
 
 #%% READ AND EXTRACT FEATURES FROM TEST DATA
+
+"""
+READ AND EXTRACT FEATURES FROM TEST DATA
+
+"""
 
 filename_list = ['Kieran','Adele','Alessandro']
     
@@ -87,8 +98,10 @@ for filename in filename_list:
         extracted_features_test[i] = extract_features(traj_segments_test,df_trajectories_test)
         i = i+1
 
-##COMBINE FEATURES AND TRAJECTORY INTO 1 DICTIONARY EACH
-        
+"""
+Combine all the features and trajectories into 1 dictionary each
+
+"""
         
 full_combined_features = extracted_features_test[0].copy()
 full_combined_trajectories = trajectory_test[0].copy()
@@ -101,17 +114,19 @@ x = 149
 for k in range(1,6):
     for t in range(0,len(trajectory_test[0])):
         
-        #full_combined_trajectories[x] = trajectory_test[k][t]
-        
         full_combined_trajectories[x] = trajectory_test[k][t]
-        
         x=x+1
+        
+"""
+Filter the features from the MJT R2 score
 
-## FILTER FEATURES BASED ON MJT R2 SCORE
+"""
 
 from sklearn.metrics import r2_score
 
 r2score = []
+
+"Create the minimum jerk trajectory for comparison with traj"
 
 for p in range(0,len(full_combined_trajectories)):
     
@@ -120,22 +135,15 @@ for p in range(0,len(full_combined_trajectories)):
     time_start_ = full_combined_trajectories[p].iloc[0,0]
     time_end_ = full_combined_trajectories[p].iloc[-1,0]
     
-    minimum_jerk_for_comp, vel = mjtg(start, end-start, 100, time_end_-time_start_)  #mjtg(start_angle[p], peak_amplitude[p]+start_angle[p], 101, time_end[p])
-    
-    # time = np.linspace(0,time_end_[p]-0.01,int(time_end_[p]*100))
+    minimum_jerk_for_comp, vel = mjtg(start, end-start, 100, time_end_-time_start_)
     time = np.linspace(time_start_,time_end_-0.01,len(minimum_jerk_for_comp))
-    
-    # plt.plot(time,minimum_jerk_for_comp)
-    # plt.plot(time,full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),-3])#.iloc[0:len(time),2])
-    
-    # plt.show()
     
     coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),-3])
     r2score.append(coefficient_of_dermination)
-    
-#print(r2score)
 
-#%%
+"""
+Filter features based on R2 score
+"""
 
 filtered_mj_traj = full_combined_trajectories.copy()
 filtered_mj_feat = full_combined_features.copy()
@@ -147,73 +155,12 @@ for h in range(0, len(full_combined_trajectories.keys())):
         filtered_mj_feat.drop([h],inplace=True)
         
 filtered_mj_feat = filtered_mj_feat.reset_index(drop = True)
-
 filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
 
-
-# REMOVE OUTLIERS
-
-#filtered_mj_feat_out = filtered_mj_feat[(np.abs(stats.zscore(filtered_mj_feat)) < 3).all(axis=1)]
-filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
-#### Remove from trajectories as well!
-
 #%%
-sns.pairplot(filtered_mj_feat_out)
-#%%
- 
-print(abs(filtered_mj_feat_out.corr()['Mean Velocity']).sort_values())
-
-print(abs(filtered_mj_feat_out.corr()['Time at half']).sort_values())
-
-#%%
-
-for traj in range(0,40):
-
-    plt.plot(filtered_mj_traj[traj]['time'], filtered_mj_traj[traj]['angular position'])
-    
-    plt.show()
-
-#%%
-
- plt.plot(filtered_mj_traj[32]['time'], filtered_mj_traj[32]['angular position'])
-    
-    
-#%%   
-
-
-# Outlier detection 
-
-def detect_outliers(df,n,features):
-    """
-    Takes a dataframe df of features and returns a list of the indices
-    corresponding to the observations containing more than n outliers according
-    to the Tukey method.
-    """
-    outlier_indices = []
-    
-    # iterate over features(columns)
-    for col in features:
-        # 1st quartile (25%)
-        Q1 = np.percentile(df[col], 25)
-        # 3rd quartile (75%)
-        Q3 = np.percentile(df[col],75)
-        # Interquartile range (IQR)
-        IQR = Q3 - Q1
-        
-        # outlier step
-        outlier_step = 1.5 * IQR
-        
-        # Determine a list of indices of outliers for feature col
-        outlier_list_col = df[(df[col] < Q1 - outlier_step) | (df[col] > Q3 + outlier_step )].index
-        
-        # append the found outlier indices for col to the list of outlier indices 
-        outlier_indices.extend(outlier_list_col)
-        
-    # select observations containing more than 2 outliers
-    outlier_indices = Counter(outlier_indices)        
-    multiple_outliers = list( k for k, v in outlier_indices.items() if v > n )
-    
-    return multiple_outliers   
+"""
+Detect outliers and drop rows
+"""
 
 lst = []
 cols = [i for i in range(0,len(filtered_mj_feat.columns)+1)]
@@ -221,71 +168,76 @@ Outliers_to_drop = detect_outliers(filtered_mj_feat,5,list(filtered_mj_feat.colu
 
 filtered_mj_feat_out = filtered_mj_feat.drop(Outliers_to_drop, axis = 0).reset_index(drop=True)
 
+"DROP TRAJECTORIES"
+filtered_mj_traj_out = {i: v for i, v in enumerate(filtered_mj_traj.values())}
+
+
+#%%
+""" Plot trajectories
+"""
+
+for traj in range(0,40):
+
+    plt.plot(filtered_mj_traj[traj]['time'], filtered_mj_traj[traj]['angular position'])
+    plt.show()
+    
+#%%
+""" Prepare Dataset
+"""
+
+dataset = filtered_mj_feat_out
+X = dataset.drop(['Peak Amplitude','Peak Velocity','Mean Velocity','Time at end', 'Time at half'],axis=1)
+y = dataset[['Peak Velocity','Time at half','Peak Amplitude','Mean Velocity']]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=42)
+
+y_train_dur = y_train.iloc[:,1]
+y_train_mv = y_train.iloc[:,3]
+    
+y_test_dur = y_test.iloc[:,1]
+y_test_mv = y_test.iloc[:,3]
+
+col = []
+
+for i in range(1,7):
+    col.append('time{}'.format(i))
+    col.append('stretch{}'.format(i))
+    col.append('BB{}'.format(i))
+    col.append('TB{}'.format(i))
+    col.append('AD{}'.format(i))
+    col.append('PC{}'.format(i))
+    col.append('Pos{}'.format(i))
+    col.append('Vel{}'.format(i))
+    col.append('Acc{}'.format(i))
+    
+X_train.columns = col
+X_test.columns = col
+
+y_train_dur.columns = ['Duration']
+y_train_mv.columns = ['Mean Velocity']
+    
+y_test_dur.columns = ['Duration']
+y_test_mv.columns = ['Mean Velocity']
+    
+#%%
+g = sns.heatmap(X_train.corr(),annot=False, fmt = ".2f", cmap = "coolwarm")
+
 
 #%%
 
-#clf,clf2,min_max_scaler, min_max_scaler2 
-X_train, X_train_scaled, y_train, X_test,y_test,clf4,clf2 = Support_Vector_Regression(filtered_mj_feat_out) #filtered_mj_feat_out
+"""
+Modelling
+"""
 
-from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve
 
-# kfold = StratifiedKFold(n_splits=10)
-# cross_val_score(clf4, X_train, y_train['Mean Velocity'], scoring='neg_mean_absolute_error',cv = 10,n_jobs=4)
+""" Scaling """
 
-#%%
+# Scale the train data to range [0 1] and scale the test data according to the train data
+min_max_scaler = preprocessing.MinMaxScaler()
+X_train_scaled = min_max_scaler.fit_transform(X_train)
+X_test_scaled = min_max_scaler.transform(X_test)
 
-from collections import Counter
-
-from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, GradientBoostingRegressor, ExtraTreesRegressor, VotingRegressor
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.neural_network import MLPRegressor
-#from sklearn.svm import SVC
-from sklearn.svm import SVR
-from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve, KFold
-from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
-
-#S = SVR(C=10, gamma = 1, kernel = 'rbf')
-
-random_state = 2
-classifiers = []
-classifiers.append(clf4)
-classifiers.append(SVR())
-classifiers.append(DecisionTreeRegressor())
-classifiers.append(AdaBoostRegressor(DecisionTreeRegressor(),learning_rate=0.1))
-classifiers.append(RandomForestRegressor())
-classifiers.append(ExtraTreesRegressor())
-classifiers.append(GradientBoostingRegressor())
-classifiers.append(MLPRegressor())
-classifiers.append(ElasticNetCV())
-classifiers.append(LassoCV())
-classifiers.append(RidgeCV())
-
-# classifiers.append(KNeighborsClassifier())
-#classifiers.append(LogisticRegression())
-#classifiers.append(LinearDiscriminantAnalysis())
-
-kfolds = KFold(n_splits=8, shuffle=True, random_state=42)
-
-cv_results = []
-for classifier in classifiers :
-    cv_results.append(-cross_val_score(classifier, X_train_scaled, y_train['Mean Velocity'].values, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=4))
-
-cv_means = []
-cv_std = []
-for cv_result in cv_results:
-    cv_means.append(cv_result.mean())
-    cv_std.append(cv_result.std())
-
-cv_res = pd.DataFrame({"CrossValMeans":cv_means,"CrossValerrors": cv_std,"Algorithm":["SVC1","SVC2","DecisionTree","AdaBoost",
-"RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNetCV","LassoCV","RidgeCV"]})
-
-g = sns.barplot("CrossValMeans","Algorithm",data = cv_res.sort_values('CrossValMeans'), palette="Set3",orient = "h",**{'xerr':cv_std})
-g.set_xlabel("Mean Error")
-g = g.set_title("Cross validation scores")
-
+baseline_regression_models(X_train_scaled, y_train['Mean Velocity'])
 
 #%%
 
@@ -439,8 +391,6 @@ for row in range(nrows):
         g.tick_params(labelsize=9)
         g.set_title(name + " feature importance")
         nclassifier += 1
-
-
 
 #%%
 
