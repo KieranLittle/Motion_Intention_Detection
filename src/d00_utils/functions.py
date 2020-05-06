@@ -10,16 +10,19 @@ import numpy as np
 from collections import Counter
 from sklearn import preprocessing
 
-def read_file(filename, trial_num):
+def read_file(sub_num, trial_num):
     
     import pandas as pd
     
     global amplitudes
     
-    stretch_imu = pd.read_csv(filename+'/imu/Trial'+trial_num+'.csv', header=None)
-    emg = pd.read_csv(filename+'/emg/Trial'+trial_num+'.csv', header=None)#'/emg/Trial4_emg.csv'
-    amplitude = pd.read_csv(filename+'/Trajectory.csv', header=None)
-    emg_MVC = pd.read_csv(filename+'/emg/MVC.csv', header=None)
+    path = 'data/01_raw/sub_'+sub_num
+    
+    
+    stretch_imu = pd.read_csv(path+'/imu/Trial'+trial_num+'.csv', header=None)
+    emg = pd.read_csv(path+'/emg/Trial'+trial_num+'.csv', header=None)#'/emg/Trial4_emg.csv'
+    amplitude = pd.read_csv(path+'/Trajectory.csv', header=None)
+    emg_MVC = pd.read_csv(path+'/emg/MVC.csv', header=None)
     
     amplitude2 = amplitude[amplitude.iloc[:,1] != 0]
     amplitudes = []
