@@ -5,11 +5,29 @@ Created on Wed May  6 11:30:01 2020
 
 @author: Kieran
 """
+### Imports
 
-new_data = pd.read_csv(r'data/03_processed/data_processed')
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import scipy.io
+import pickle
+import seaborn as sns   
 
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+from sklearn.svm import SVR
+from src.d00_utils.functions import *
+from scipy import stats
 
-#%%
+import sys
+import os
+
+#%% Read data
+
+dataset = pd.read_csv(r'data/03_processed/data_processed')
+
+#%% Train Test Split
 
 X = dataset.drop(['peak_amplitude','peak_velocity','mean_velocity','time_end', 'time_half'],axis=1)
 y = dataset[['peak_velocity','time_half','peak_amplitude','mean_velocity']]
@@ -22,7 +40,6 @@ y_train_mv = y_train['mean_velocity']
 y_test_dur = y_test['time_half']
 y_test_mv = y_test['mean_velocity']
     
-    
 
 #%% Visualisations
 
@@ -34,16 +51,64 @@ g = sns.heatmap(X_train.corr(),annot=False, fmt = ".2f", cmap = "coolwarm")
 ### Scaling
 
 # Scale the train data to range [0 1] and scale the test data according to the train data
-min_max_scaler = preprocessing.MinMaxScaler()
-X_train_scaled = min_max_scaler.fit_transform(X_train)
-X_test_scaled = min_max_scaler.transform(X_test)
+# min_max_scaler = preprocessing.MinMaxScaler()
+# X_train_scaled = min_max_scaler.fit_transform(X_train)
+# X_test_scaled = min_max_scaler.transform(X_test)
 
 ### Baseline regression models
-baseline_regression_models(X_train_scaled, y_train_mv)
-baseline_regression_models(X_train_scaled, y_train_dur)
+
+kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
+
+baseline_regression_models(X_train, y_train_mv, kfolds)
+baseline_regression_models(X_train, y_train_dur, kfolds)
+
+#  Best baseline model for velocity: 
+#     1. RidgeCV
+#     2. LassoCV
+#     3. ElasticNetCV
+#     4. Gradiant Boosting
+#     5. Random Forest
+
+#  Best baseline model for duration: 
+#     1. ExtraTrees
+#     2. RandomForest
+#     3. SVR
+#     4. Adaboost
+#     5. Gradient Boosting
+
+#%% Hyper parameter tuning
+
+
 
 #%%
+
+ridge=Ridge()
+parameters= {'alpha':[x for x in [1e-9,1e-8,1e-7,1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 0.1, 1, 10]],'normalize':[True,False],"fit_intercept": [True, False], "solver": ['svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga']}
+
+ridge_reg=GridSearchCV(ridge, cv=kfolds, param_grid=parameters,scoring = "neg_mean_absolute_error",n_jobs=2)
+
+ridge_reg.fit(X_train,y_train_mv)
+print("The best value of Alpha is: ",ridge_reg.best_params_)
+print("Score: " ,-ridge_reg.best_score_)
+
+
+#%%
+from sklearn.linear_model import Lasso
+
+Lasso_reg =Lasso()
+parameters= {'alpha':[x for x in [1e-9,1e-8,1e-7,1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 0.1, 1, 10]],'normalize':[True,False], "fit_intercept": [True, False],'max_iter':[100000]}
+
+Lasso_reg=GridSearchCV(Lasso_reg, param_grid=parameters)
+Lasso_reg.fit(X_train,y_train_mv)
+
+print("The best value of Alpha is: ",Lasso_reg.best_params_,-Lasso_reg.best_score_)
+
+#%%
+
+### Random Forest
+
 from sklearn.model_selection import RandomizedSearchCV
+
 # Number of trees in random forest
 n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
 # Number of features to consider at every split

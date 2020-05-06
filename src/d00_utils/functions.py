@@ -10,6 +10,21 @@ import numpy as np
 from collections import Counter
 from sklearn import preprocessing
 
+from collections import Counter
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, GradientBoostingRegressor, ExtraTreesRegressor, VotingRegressor
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.svm import SVR
+from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve, KFold
+from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV, Ridge, ElasticNet, Lasso
+import pandas as pd
+import seaborn as sns
+
+from sklearn.pipeline import make_pipeline
+
 def read_file(sub_num, trial_num):
     
     import pandas as pd
@@ -1307,38 +1322,25 @@ def detect_outliers(df,n,features):
     
 
 def baseline_regression_models(X_train, y_train, kfolds=0, n_jobs=1):
-
-    from collections import Counter
-    from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, GradientBoostingRegressor, ExtraTreesRegressor, VotingRegressor
-    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.neighbors import KNeighborsClassifier
-    from sklearn.tree import DecisionTreeRegressor
-    from sklearn.neural_network import MLPRegressor
-    from sklearn.svm import SVR
-    from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve, KFold
-    from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
-    import pandas as pd
-    import seaborn as sns
     
     classifiers = []
     classifiers.append(SVR())
-    classifiers.append(DecisionTreeRegressor())
-    classifiers.append(AdaBoostRegressor(DecisionTreeRegressor(),learning_rate=0.1))
-    classifiers.append(RandomForestRegressor())
-    classifiers.append(ExtraTreesRegressor())
-    classifiers.append(GradientBoostingRegressor())
-    classifiers.append(MLPRegressor())
-    classifiers.append(ElasticNetCV())
-    classifiers.append(LassoCV())
-    classifiers.append(RidgeCV())
+    classifiers.append(DecisionTreeRegressor(random_state=42))
+    classifiers.append(AdaBoostRegressor(DecisionTreeRegressor(random_state=42),random_state=42,learning_rate=0.1))
+    classifiers.append(RandomForestRegressor(random_state=42))
+    classifiers.append(ExtraTreesRegressor(random_state=42))
+    classifiers.append(GradientBoostingRegressor(random_state=42))
+    classifiers.append(MLPRegressor(random_state=42))
+    classifiers.append(ElasticNet(random_state=42))
+    classifiers.append(Lasso(random_state=42))
+    classifiers.append(Ridge(random_state=42))
     
     if kfolds ==0:
-        kfolds = KFold(n_splits=8, shuffle=True, random_state=42)
+        kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
     
     cv_results = []
     for classifier in classifiers :
-        cv_results.append(-cross_val_score(classifier, X_train, y_train.values, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))
+        cv_results.append(-cross_val_score(classifier, X_train, y_train, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))
     
     cv_means = []
     cv_std = []
@@ -1347,7 +1349,7 @@ def baseline_regression_models(X_train, y_train, kfolds=0, n_jobs=1):
         cv_std.append(cv_result.std())
     
     cv_res = pd.DataFrame({"CrossValMeans":cv_means,"CrossValerrors": cv_std,"Algorithm":["SVR","DecisionTree","AdaBoost",
-    "RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNetCV","LassoCV","RidgeCV"]})
+    "RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNet","Lasso","Ridge"]})
     
     g = sns.barplot("CrossValMeans","Algorithm",data = cv_res.sort_values('CrossValMeans'), palette="Set3",orient = "h",**{'xerr':cv_std})
     g.set_xlabel("Mean Error")
