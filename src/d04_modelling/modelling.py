@@ -88,7 +88,7 @@ parameters= {'alpha':[x for x in [1e-9,1e-8,1e-7,1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1
 ridge_reg=GridSearchCV(ridge, cv=kfolds, param_grid=parameters,scoring = "neg_mean_absolute_error",n_jobs=2)
 
 ridge_reg.fit(X_train,y_train_mv)
-print("The best value of Alpha is: ",ridge_reg.best_params_)
+print("The best value of Ridge is: ",ridge_reg.best_params_)
 print("Score: " ,-ridge_reg.best_score_)
 
 
@@ -96,14 +96,38 @@ print("Score: " ,-ridge_reg.best_score_)
 from sklearn.linear_model import Lasso
 
 Lasso_reg =Lasso()
-parameters= {'alpha':[x for x in [1e-9,1e-8,1e-7,1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 0.1, 1, 10]],'normalize':[True,False], "fit_intercept": [True, False],'max_iter':[100000]}
+parameters= {'alpha':[0.015],'normalize':[True,False], "fit_intercept": [True, False],'max_iter':[5000], 'tol':[0.01,0.001,0.0001]}
 
-Lasso_reg=GridSearchCV(Lasso_reg, param_grid=parameters)
+Lasso_reg=GridSearchCV(Lasso_reg, cv=kfolds, param_grid=parameters,scoring = "neg_mean_absolute_error",n_jobs=2)
 Lasso_reg.fit(X_train,y_train_mv)
 
-print("The best value of Alpha is: ",Lasso_reg.best_params_,-Lasso_reg.best_score_)
+print("The best value of Lasso is: ",Lasso_reg.best_params_)
+print("Score: " ,-Lasso_reg.best_score_)
+
+#%% Multiple Layer Perceptron
+
+parameter_space = {
+    'hidden_layer_sizes': [40,50,60,70],
+    'activation': ['relu','tanh'],
+    'solver': ['sgd', 'adam'],
+    'alpha': [0.0001, 0.005],
+    'learning_rate': ['constant','adaptive'], 
+    'random_state':[42]
+}
+
+MLPR = MLPRegressor()
+
+MLPR = GridSearchCV(MLPR, parameter_space, n_jobs=-1, cv=kfolds, scoring = "neg_mean_absolute_error")
+MLPR.fit(X_train, y_train_mv)
+
+print("The best value of MLP is: ",MLPR.best_params_)
+print("Score: " ,-MLPR.best_score_)
+
+
 
 #%%
+
+
 
 ### Random Forest
 
@@ -146,7 +170,7 @@ rf = RandomForestRegressor()
 # search across 100 different combinations, and use all available cores
 rf_random = RandomizedSearchCV(estimator = rf, param_distributions = random_grid, n_iter = 100, cv = 3, verbose=2, random_state=42, n_jobs = 1)
 # Fit the random search model
-rf_random.fit(X_train, y_train['Mean Velocity'])
+rf_random.fit(X_train, y_train_mv)
 
 RF_best =  rf_random.best_estimator_.feature_importances_
 
