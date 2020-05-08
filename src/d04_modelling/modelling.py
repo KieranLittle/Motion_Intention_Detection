@@ -36,15 +36,25 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random
 
 y_train_dur = y_train['time_half']
 y_train_mv = y_train['mean_velocity']
+y_train_pa = y_train['peak_amplitude']
     
 y_test_dur = y_test['time_half']
 y_test_mv = y_test['mean_velocity']
-    
+y_test_pa = y_test['peak_amplitude']
 
 #%% Visualisations
 
 g = sns.heatmap(X_train.corr(),annot=False, fmt = ".2f", cmap = "coolwarm")
 
+
+#%%
+from sklearn.decomposition import PCA
+
+pca = PCA(0.99)
+X_train = pca.fit_transform(X_train)
+X_test = pca.transform(X_test)
+
+pca.n_components_
 
 #%% Modelling
 
@@ -61,6 +71,7 @@ kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
 
 baseline_regression_models(X_train, y_train_mv, kfolds)
 baseline_regression_models(X_train, y_train_dur, kfolds)
+baseline_regression_models(X_train, y_train_pa, kfolds)
 
 #  Best baseline model for velocity: 
 #     1. RidgeCV
@@ -78,7 +89,12 @@ baseline_regression_models(X_train, y_train_dur, kfolds)
 
 #%% Hyper parameter tuning
 
+GBR = GradientBoostingRegressor()
 
+GBR.fit(X_train, y_train_pa)
+
+plt.scatter(y_test_pa, GBR.predict(X_test))
+plt.plot([0,175],[0,175],'r')
 
 #%%
 
@@ -107,7 +123,7 @@ print("Score: " ,-Lasso_reg.best_score_)
 #%% Multiple Layer Perceptron
 
 parameter_space = {
-    'hidden_layer_sizes': [40,50,60,70],
+    'hidden_layer_sizes': [20,40,50,60,70],
     'activation': ['relu','tanh'],
     'solver': ['sgd', 'adam'],
     'alpha': [0.0001, 0.005],
@@ -118,18 +134,23 @@ parameter_space = {
 MLPR = MLPRegressor()
 
 MLPR = GridSearchCV(MLPR, parameter_space, n_jobs=-1, cv=kfolds, scoring = "neg_mean_absolute_error")
-MLPR.fit(X_train, y_train_mv)
+MLPR.fit(X_train, y_train_dur)
 
 print("The best value of MLP is: ",MLPR.best_params_)
 print("Score: " ,-MLPR.best_score_)
 
-
-
 #%%
+y = y_test_dur
+a = np.min(y)
+b = np.max(y)
+
+
+plt.scatter(y_test_dur,MLPR.predict(X_test))
+plt.plot([i for i in range(0.5,2.5)],[i for i in range(0.5,2.5)],'r')
 
 
 
-### Random Forest
+#%% Random Forest
 
 from sklearn.model_selection import RandomizedSearchCV
 
@@ -176,26 +197,13 @@ RF_best =  rf_random.best_estimator_.feature_importances_
 
 #%%
 #columns = time, stretch1, BB1, TB1, AD1, P1, Pos1,Vel1, acc1 
--cross_val_score(rf_random.best_estimator_, X_train_scaled, y_train['Mean Velocity'].values, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=1)
+np.mean(-cross_val_score(rf_random.best_estimator_, X_train, y_train_mv, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=1))
 
-
-lst = []
-
-for i in range(1,7):
-    lst.append('time{}'.format(i))
-    lst.append('stretch{}'.format(i))
-    lst.append('BB{}'.format(i))
-    lst.append('TB{}'.format(i))
-    lst.append('AD{}'.format(i))
-    lst.append('PC{}'.format(i))
-    lst.append('Pos{}'.format(i))
-    lst.append('Vel{}'.format(i))
-    lst.append('Acc{}'.format(i))
-
-series = pd.Series(lst)
+#series = pd.Series(lst)
 indices = np.argsort(RF_best)[::-1][:20]
 
-g = sns.barplot(y = series[indices], x = RF_best[indices])
+g = sns.barplot(y = X_train.columns[indices], x = RF_best[indices])
+#g = sns.barplot(x = ['1','2','3','4','5'], y = RF_best[indices])
 
 #%%
 ### META MODELING  WITH ADABOOST, RF, EXTRATREES and GRADIENTBOOSTING

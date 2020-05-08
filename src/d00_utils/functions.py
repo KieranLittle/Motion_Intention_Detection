@@ -22,6 +22,7 @@ from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFo
 from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV, Ridge, ElasticNet, Lasso
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 from sklearn.pipeline import make_pipeline
 
@@ -230,6 +231,9 @@ def filter_smooth(old_dataset):
     #new_dataset['angular acceleration'] = filteremg(new_dataset['time'],acc,low_pass=5, sfreq=100, high_band=20, low_band=450, graphs=1)
     
     new_dataset['stretch'] = lowpass_filter(new_dataset['time'],new_dataset['stretch'],2,4,100)
+    new_dataset['stretch_d'] = np.append(np.diff(new_dataset['stretch'],1)/0.01,0)
+    new_dataset['stretch_dd'] =np.append(np.diff(new_dataset['stretch_d'],1)/0.01,0)
+    
     
 #    new_dataset.drop(new_dataset.index[0:N-1],inplace=True) 
 #    new_dataset['imu']=imu_smooth
@@ -244,6 +248,16 @@ def filter_smooth(old_dataset):
     new_dataset['triceps']=triceps_filtered
     new_dataset['deltoid']=deltoid_filtered
     new_dataset['pecs']=pecs_filtered
+    
+    new_dataset['biceps_d']=np.append(np.diff(new_dataset['biceps'],1)/0.01,0)
+    new_dataset['triceps_d']=np.append(np.diff(new_dataset['triceps'],1)/0.01,0)
+    new_dataset['deltoid_d']=np.append(np.diff(new_dataset['deltoid'],1)/0.01,0)
+    new_dataset['pecs_d']=np.append(np.diff(new_dataset['pecs'],1)/0.01,0)
+    
+    new_dataset['biceps_dd']=np.append(np.diff(new_dataset['biceps_d'],1)/0.01,0)
+    new_dataset['triceps_dd']=np.append(np.diff(new_dataset['triceps_d'],1)/0.01,0)
+    new_dataset['deltoid_dd']=np.append(np.diff(new_dataset['deltoid_d'],1)/0.01,0)
+    new_dataset['pecs_dd']=np.append(np.diff(new_dataset['pecs_d'],1)/0.01,0)
 
     return new_dataset
 
@@ -277,7 +291,11 @@ def segment_data(dataset,amplitudes):
           
           # Define initial trajectory
           trajectory_temp[count] = dataset.iloc[j:j+700,:] #400
-          f = trajectory_temp[count].loc[((trajectory_temp[count].iloc[:,-3] > np.max(trajectory_temp[count].iloc[:,-3]-5)))] #& (trajectory_temp[count].iloc[:,-2]>0))] 
+          ap_col = trajectory_temp[count].columns.get_loc("angular position")
+          av_col = trajectory_temp[count].columns.get_loc("angular velocity")
+          
+          f = trajectory_temp[count].loc[((trajectory_temp[count].iloc[:,ap_col] > np.max(trajectory_temp[count].iloc[:,ap_col]-5)))] #& (trajectory_temp[count].iloc[:,-2]>0))] 
+          
           end = f.index[0]- dataset.index[j]                               
           #trajectory[count] = trajectory_temp[count].iloc[0:f.index[0]]
                  
@@ -287,36 +305,10 @@ def segment_data(dataset,amplitudes):
           max
           end_traj = trajectory_temp[count][(end-50):]
           
-          #diff
-          
-          # try:
-          #     limit = 0.01#+dataset.iloc[j,-2]
-          #     amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] 
-          #     end_amplitude_index = amp_range.index[0]+40
-          # except:
-          #     try:
-          #         limit = 0.05#+dataset.iloc[j,-2]
-          #         amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] 
-          #         end_amplitude_index = amp_range.index[0]+40
-          #     except:
- 
-          #         end_amplitude_index = end_traj.index[-1]
-              
-          amp_range = end_traj.loc[(end_traj.iloc[:,-2] < 1.0+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
+          amp_range = end_traj.loc[(end_traj['angular velocity'] < 1.0+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
           end_amplitude_index = amp_range.index[0]
               
-          #amp_range = end_traj.loc[(end_traj.iloc[:,-2] < limit)] #+dataset.iloc[j,-2])]
-          
-          #amp_range = trajectory[count].loc[(trajectory[count].iloc[:,-2] > 0.02+dataset.iloc[j,-2])&(trajectory[count]['angular velocity']>0)&(trajectory[count]['angular acceleration']<0)]
-          #end_amplitude_index = amp_range.index[0]
-          
-          # Define the start point of the trajectory
-          #a = trajectory[count].loc[(trajectory[count]['angular acceleration']) > 0.001] #(10.0+dataset['angular position'][j]
-          # p = (trajectory[count]['angular velocity']) > 0.01+dataset.iloc[j,-2]
-          # z = p>0
-          
-          #a = trajectory[count].loc[(trajectory[count]['angular velocity'] > 0.01)&(trajectory[count]['angular velocity']>0)]  
-          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,-2] > 1.0)]   #&(trajectory[count]['angular velocity']>0)]  
+          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,av_col] > 1.0)]   #&(trajectory[count]['angular velocity']>0)]  
           
           start_amplitude_index_temp = a.index[0]
           
@@ -334,13 +326,15 @@ def segment_data(dataset,amplitudes):
           # Measure variables that define the trajectory: 
           
           # Find the start and end angular position and the change
-          end_amplitude =  trajectory[count].iloc[-1,-3]#trajectory[count].iloc[amp_range_index,-3]
-          start_amplitude = trajectory[count].iloc[0,-3]
+          
+          
+          end_amplitude =  trajectory[count].iloc[-1,ap_col]#trajectory[count].iloc[amp_range_index,-3]
+          start_amplitude = trajectory[count].iloc[0,ap_col]
           amplitude_change_ = end_amplitude- start_amplitude
           amplitude_change.append(amplitude_change_)
           
           
-          b = trajectory[count].loc[(trajectory[count].iloc[:,-3] < (start_amplitude + 10))]#0.05*(amplitude_change_)))]      #+trajectory[count].iloc[0,-3])] : 0.25*(trajectory[count].iloc[-1,-3]-trajectory[count].iloc[-1,-3]
+          b = trajectory[count].loc[(trajectory[count].iloc[:,ap_col] < (start_amplitude + 5))]#0.05*(amplitude_change_)))]      #+trajectory[count].iloc[0,-3])] : 0.25*(trajectory[count].iloc[-1,-3]-trajectory[count].iloc[-1,-3]
           traj_segment[count] = dataset.iloc[start_amplitude_index:b.index[-1],:] 
             
           
@@ -349,12 +343,12 @@ def segment_data(dataset,amplitudes):
           
 
           half_time_ = d.iloc[-1,0]- trajectory[count].iloc[0,0]
-          amplitude_half = d.iloc[-1,-3] #- start_amplitude
+          amplitude_half = d.iloc[-1,ap_col] #- start_amplitude
           
           time_half.append(half_time_)
             
           # Find the amplitude at halfway
-          #amplitude_half = d.iloc[-1,-3] - start_amplitude
+          #amplitude_half = d.iloc[-1,ap_col] - start_amplitude
           half_amplitude_change.append(amplitude_half)
           
           # Find peak and mean velocity
@@ -554,7 +548,20 @@ def extract_features(segments, df):
   segment_duration = []
   features_df = pd.DataFrame()
   
-
+  # New features
+  
+  stretch_mean = []
+  bb_mean = []
+  tb_mean =[]
+  ad_mean = []
+  pm_mean =[]
+  
+  stretch_var = []
+  bb_var = []
+  tb_var = []
+  ad_var = []
+  pm_var = []
+  
   for segment_number in range(0,len(segments)):
       
     ## Time
@@ -620,7 +627,22 @@ def extract_features(segments, df):
         3. velocity 
         4. acceleration
         = 24 features
+        
+        + mean
+        + var
       """
+      
+      stretch_mean.append(np.mean(segments[segment_number]['stretch']))
+      bb_mean.append(np.mean(segments[segment_number]['biceps']))
+      tb_mean.append(np.mean(segments[segment_number]['triceps']))
+      ad_mean.append(np.mean(segments[segment_number]['deltoid']))
+      pm_mean.append(np.mean(segments[segment_number]['pecs']))
+      
+      stretch_var.append(np.var(segments[segment_number]['stretch']))
+      bb_var.append(np.var(segments[segment_number]['biceps']))
+      tb_var.append(np.var(segments[segment_number]['triceps']))
+      ad_var.append(np.var(segments[segment_number]['deltoid']))
+      pm_var.append(np.var(segments[segment_number]['pecs']))
     
       segments[segment_number]['time'] = np.round([i - segments[segment_number]['time'].iloc[0] for i in segments[segment_number]['time']],2)
     
@@ -629,6 +651,7 @@ def extract_features(segments, df):
       features_df_single = pd.DataFrame(np.array(segments[segment_number].iloc[indicies,:]).ravel())
       features_df_single = features_df_single.T  
       features_df = features_df.append(features_df_single)
+          
         
   dict = {'curr_triceps_change2': curr_triceps_change2, 'curr_biceps_change2': curr_biceps_change2,\
           'triceps_min':triceps_min, 'triceps_max':triceps_max,'pecs_sum':pecs_sum,\
@@ -644,6 +667,21 @@ def extract_features(segments, df):
       #'deltoid_gradient':deltoid_gradient, 'pecs_gradient':pecs_gradient, 'imu_max':imu_max, 'stretch_gradient':stretch_gradient,'stretch_max':stretch_max} # 'stretch_gradient':stretch_gradient, 'window_max_velocity':velocity_max'stretch_gradient':stretch_gradient 'imu_diff':imu_diff 'window_max_velocity':velocity_max}  #'stretch_diff':stretch_gradient #stretch_diff':stretch_diff} #'velocity_max':velocity_max, 'biceps_max':biceps_max, 'triceps_diff':triceps_diff, 'deltoid_diff':deltoid_diff 'velocity_max':velocity_max 'stretch_diff':stretch_diff,'imu_diff':imu_diff,  'triceps_sum':triceps_sum,'deltoid_sum':deltoid_sum,'pecs_sum':pecs_sum,'amplitude':amplitude}
       
   #df2 = pd.DataFrame(dict) 
+  
+  
+  # features_df['stretch_mean'] = stretch_mean
+  # features_df['bb_mean'] = bb_mean
+  # features_df['tb_mean'] = tb_mean
+  # features_df['ad_mean'] = ad_mean
+  # features_df['pm_mean'] = pm_mean
+
+  # features_df['stretch_var'] = stretch_var
+  # features_df['bb_var'] = bb_var
+  # features_df['tb_var'] = tb_var
+  # features_df['ad_var'] = ad_var
+  # features_df['pm_var'] = pm_var
+      
+      
   df2 = features_df
       
     #df2['End Window Time'] = time_3degrees
@@ -1351,10 +1389,12 @@ def baseline_regression_models(X_train, y_train, kfolds=0, n_jobs=1):
     cv_res = pd.DataFrame({"CrossValMeans":cv_means,"CrossValerrors": cv_std,"Algorithm":["SVR","DecisionTree","AdaBoost",
     "RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNet","Lasso","Ridge"]})
     
+    plt.figure()
     g = sns.barplot("CrossValMeans","Algorithm",data = cv_res.sort_values('CrossValMeans'), palette="Set3",orient = "h",**{'xerr':cv_std})
     g.set_xlabel("Mean Error")
     g = g.set_title("Cross validation scores")
 
+    print(cv_res.sort_values('CrossValMeans'))
     return cv_res.sort_values('CrossValMeans')
 
 

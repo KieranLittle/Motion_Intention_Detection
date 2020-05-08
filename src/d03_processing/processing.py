@@ -24,6 +24,7 @@ import sys
 import os
 
 
+
 #%% READ TRAINING DATA AND TRAIN SVM
 
 """
@@ -96,6 +97,7 @@ for filename in filename_list:
         extracted_features_test[i] = extract_features(traj_segments_test,df_trajectories_test)
         i = i+1
 
+#%%
 """
 Combine all the features and trajectories into 1 dictionary each
 
@@ -112,16 +114,27 @@ x = 149
 col = []
 
 for i in range(1,7):
-    col.append('time{}'.format(i))
-    col.append('stretch{}'.format(i))
+    col.append('t{}'.format(i))
+    col.append('s{}'.format(i))
     col.append('bb{}'.format(i))
     col.append('tb{}'.format(i))
     col.append('ad{}'.format(i))
     col.append('pm{}'.format(i))
-    col.append('pos{}'.format(i))
-    col.append('vel{}'.format(i))
-    col.append('acc{}'.format(i))
+    col.append('theta{}'.format(i))
+    col.append('theta_d{}'.format(i))
+    col.append('theta_dd{}'.format(i))
+    col.append('s_d{}'.format(i))
+    col.append('s_dd{}'.format(i))
+    col.append('bb_d{}'.format(i))
+    col.append('tb_d{}'.format(i))
+    col.append('ad_d{}'.format(i))
+    col.append('pm_d{}'.format(i))
+    col.append('bb_dd{}'.format(i))
+    col.append('tb_dd{}'.format(i))
+    col.append('ad_dd{}'.format(i))
+    col.append('pm_dd{}'.format(i))
 
+# col.extend(['stretch_mean','bb_mean','tb_mean','ad_mean','pm_mean','stretch_var','bb_var','tb_var','ad_var','pm_var'])
 col.extend(['peak_velocity','peak_amplitude','mean_velocity','time_end','time_half'])
             
 full_combined_features.columns = col
@@ -131,7 +144,9 @@ for k in range(1,6):
         
         full_combined_trajectories[x] = trajectory_test[k][t]
         x=x+1
+   
         
+#%%   
 """
 Filter the features from the MJT R2 score
 
@@ -145,15 +160,18 @@ r2score = []
 
 for p in range(0,len(full_combined_trajectories)):
     
-    start = full_combined_trajectories[p].iloc[0,-3]
-    end = full_combined_trajectories[p].iloc[-1,-3]
+    theta_col = full_combined_trajectories[p].columns.get_loc("angular position")
+    theta_d_col = full_combined_trajectories[p].columns.get_loc("angular position")
+    
+    start = full_combined_trajectories[p].iloc[0,theta_col]
+    end = full_combined_trajectories[p].iloc[-1,theta_col]
     time_start_ = full_combined_trajectories[p].iloc[0,0]
     time_end_ = full_combined_trajectories[p].iloc[-1,0]
     
     minimum_jerk_for_comp, vel = mjtg(start, end-start, 100, time_end_-time_start_)
     time = np.linspace(time_start_,time_end_-0.01,len(minimum_jerk_for_comp))
     
-    coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),-3])
+    coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),theta_col])
     r2score.append(coefficient_of_dermination)
 
 """
@@ -176,7 +194,7 @@ filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
 
 lst = []
 cols = [i for i in range(0,len(filtered_mj_feat.columns)+1)]
-Outliers_to_drop = detect_outliers(filtered_mj_feat,5,list(filtered_mj_feat.columns.values))
+Outliers_to_drop = detect_outliers(filtered_mj_feat,20,list(filtered_mj_feat.columns.values))
 
 filtered_mj_feat_out = filtered_mj_feat.drop(Outliers_to_drop, axis = 0).reset_index(drop=True)
 
