@@ -276,6 +276,7 @@ def segment_data(dataset,amplitudes):
     traj_segment ={}
     trajectory = {}
     trajectory_temp = {}
+    segments = {}
     
     time_start = []
     time_half = []
@@ -285,6 +286,12 @@ def segment_data(dataset,amplitudes):
     mean_segment_velocity = []
     segment_max_point = []
     segment_cut_off = []
+    
+    angle_cutoff = [2,5,10,15]
+    
+    for j in range(0,len(angle_cutoff)):
+        segments[j] = {}
+
     
     for j in range(0,len(dataset['time'])):
       if (dataset['time'][j] % 8.0 == 0.0) & (dataset['time'][j] != 0.0) & (dataset['time'][j] != 1200.0): #& (dataset['imu'][j] < 5):
@@ -302,7 +309,6 @@ def segment_data(dataset,amplitudes):
           # Define the end point of the trajectory:
           #amp_range = trajectory[count].loc[(trajectory[count]['angular position'] > max_amp-5)]
           
-          max
           end_traj = trajectory_temp[count][(end-50):]
           
           amp_range = end_traj.loc[(end_traj['angular velocity'] < 1.0+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
@@ -333,10 +339,12 @@ def segment_data(dataset,amplitudes):
           amplitude_change_ = end_amplitude- start_amplitude
           amplitude_change.append(amplitude_change_)
           
+          # define end of window
           
-          b = trajectory[count].loc[(trajectory[count].iloc[:,ap_col] < (start_amplitude + 5))]#0.05*(amplitude_change_)))]      #+trajectory[count].iloc[0,-3])] : 0.25*(trajectory[count].iloc[-1,-3]-trajectory[count].iloc[-1,-3]
-          traj_segment[count] = dataset.iloc[start_amplitude_index:b.index[-1],:] 
-            
+          for angle in angle_cutoff:
+          
+              cut_off_index = trajectory[count].loc[(trajectory[count].iloc[:,ap_col] < (start_amplitude + angle))].index[-1]
+              segments[angle_cutoff.index(angle)][count] = dataset.iloc[start_amplitude_index:cut_off_index,:]
           
           # Find the time at half the cycle
           d = trajectory[count].loc[((trajectory[count]['angular position'] - start_amplitude) < (amplitude_change_/2))]
@@ -383,7 +391,7 @@ def segment_data(dataset,amplitudes):
         
     df = pd.DataFrame(dict)
         
-    return traj_segment, trajectory,df
+    return segments, trajectory,df #traj_segment
 
 def plot_segments(segments, peak_amplitude,peak_velocity):
     
@@ -484,7 +492,7 @@ def plot_traj(trajectory,segment_line, segment_max_point):
     return 0
     
 
-def extract_features(segments, df):
+def extract_features(segments, df,filename,trial_num):
     
   import numpy as np
   import pandas as pd
@@ -546,7 +554,8 @@ def extract_features(segments, df):
   deltoid_min = []
   
   segment_duration = []
-  features_df = pd.DataFrame()
+  features_df = {} #pd.DataFrame()
+  df_selected_features = {}
   
   # New features
   
@@ -562,103 +571,145 @@ def extract_features(segments, df):
   ad_var = []
   pm_var = []
   
-  for segment_number in range(0,len(segments)):
+  col = []
+
+  for i in range(1,7):
+     col.append('time{}'.format(i))
+     col.append('stretch{}'.format(i))
+     col.append('bb{}'.format(i))
+     col.append('tb{}'.format(i))
+     col.append('ad{}'.format(i))
+     col.append('pm{}'.format(i))
+     col.append('pos{}'.format(i))
+     col.append('vel{}'.format(i))
+     col.append('acc{}'.format(i))
       
-    ## Time
-      segment_duration.append(segments[segment_number].iloc[-1,0] - segments[segment_number].iloc[0,0])
-      
-    ## Position  
-      
-      imu_sum.append(segments[segment_number]['angular position'].sum())
-      imu_max.append(np.max(segments[segment_number]['angular position']))
-      imu_diff.append(segments[segment_number].iloc[-1]['angular position'] - segments[segment_number].iloc[0]['angular position'])
-      
-    ## Velocity
-      velocity_max.append(np.max(segments[segment_number]['angular velocity']))
-      curr_velocity.append(np.mean(segments[segment_number].iloc[-30:,-2]))
-      
-    ## Acceleration
-      curr_acc.append(np.mean(segments[segment_number].iloc[-30:,-1]))#[(len(segments[segment_number])-30):]))
-      
-    ## Stretch
-      stretch_sum.append(segments[segment_number]['stretch'].sum())
-      stretch_max.append(np.max(segments[segment_number].iloc[:-10,1]))
-      curr_stretch_change.append(np.mean(np.diff(segments[segment_number]['stretch'],1)[(len(segments[segment_number])-30):]))
-      curr_stretch_change2.append(np.mean(np.diff(segments[segment_number]['stretch'],2)[(len(segments[segment_number])-30):]))
-      stretch_diff.append(segments[segment_number].iloc[-1]['stretch'] - segments[segment_number].iloc[0]['stretch'])
-      #stretch_gradient.append(np.max(np.diff(segments[segment_number].iloc[:-10,1],1)/0.01))
-      
-    ## Biceps
-      
-      biceps_sum.append(segments[segment_number]['biceps'].sum())
-      biceps_max.append(np.max(np.abs(segments[segment_number]['biceps'])))
-      curr_biceps_change.append(np.mean(np.diff(segments[segment_number]['biceps'],1)[(len(segments[segment_number])-30):]))
-      curr_biceps_change2.append(np.mean(np.diff(segments[segment_number]['biceps'],2)[(len(segments[segment_number])-30):]))
-      #biceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,3],1)/0.01))
-      biceps_diff.append(segments[segment_number].iloc[-1]['biceps'] - segments[segment_number].iloc[0]['biceps'])
-      biceps_min.append(np.min(segments[segment_number]['biceps']))
-      biceps_min_time.append(segments[segment_number].loc[segments[segment_number].idxmin()['biceps']]['time']-segments[segment_number].iloc[0,0])
-       
-    ## Triceps
-      triceps_sum.append(segments[segment_number]['triceps'].sum())
-      triceps_max.append(np.max(np.abs(segments[segment_number]['triceps'])))
-      curr_triceps_change.append(np.mean(np.diff(segments[segment_number]['triceps'],1)[(len(segments[segment_number])-30):]))
-      curr_triceps_change2.append(np.mean(np.diff(segments[segment_number]['triceps'],2)[(len(segments[segment_number])-30):]))
-      #triceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,4],1)/0.01))
-      triceps_diff.append(segments[segment_number].iloc[-1]['triceps'] - segments[segment_number].iloc[0]['triceps'])
-      triceps_min.append(np.min(segments[segment_number]['triceps']))
-    
-    ## Deltoid
-      deltoid_sum.append(segments[segment_number]['deltoid'].sum())
-      deltoid_max.append(np.max(np.abs(segments[segment_number]['deltoid'])))
-      #deltoid_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,5],1)/0.01))
-      deltoid_diff.append(segments[segment_number].iloc[-1]['deltoid'] - segments[segment_number].iloc[0]['deltoid'])
-      deltoid_min.append(np.min(segments[segment_number]['deltoid']))
-      
-    ## Pecs
-      pecs_sum.append(segments[segment_number]['pecs'].sum())
-      #pecs_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,6],1)/0.01))
+     col.append('stretch_d{}'.format(i))
+     col.append('stretch_dd{}'.format(i))
+        
+     col.append('bb_d_{}'.format(i))
+     col.append('tb_d_{}'.format(i))
+     col.append('ad_d_{}'.format(i))
+     col.append('pm_d_{}'.format(i))
+     col.append('bb_dd_{}'.format(i))
+     col.append('tb_dd_{}'.format(i))
+     col.append('ad_dd_{}'.format(i))
+     col.append('pm_dd_{}'.format(i))
      
-      """ 
-      Define segment length, split into 6 evenly spaced points
-      Features of each point for each sensor (6):
-        1. time
-        2. position
-        3. velocity 
-        4. acceleration
-        = 24 features
-        
-        + mean
-        + var
-      """
+  for window in range(0,len(segments)):
       
-      stretch_mean.append(np.mean(segments[segment_number]['stretch']))
-      bb_mean.append(np.mean(segments[segment_number]['biceps']))
-      tb_mean.append(np.mean(segments[segment_number]['triceps']))
-      ad_mean.append(np.mean(segments[segment_number]['deltoid']))
-      pm_mean.append(np.mean(segments[segment_number]['pecs']))
-      
-      stretch_var.append(np.var(segments[segment_number]['stretch']))
-      bb_var.append(np.var(segments[segment_number]['biceps']))
-      tb_var.append(np.var(segments[segment_number]['triceps']))
-      ad_var.append(np.var(segments[segment_number]['deltoid']))
-      pm_var.append(np.var(segments[segment_number]['pecs']))
-    
-      segments[segment_number]['time'] = np.round([i - segments[segment_number]['time'].iloc[0] for i in segments[segment_number]['time']],2)
-    
-      segment_length = len(segments[segment_number]) # in samples
-      indicies = np.round(np.linspace(0,segment_length-1, 6)).astype(int)
-      features_df_single = pd.DataFrame(np.array(segments[segment_number].iloc[indicies,:]).ravel())
-      features_df_single = features_df_single.T  
-      features_df = features_df.append(features_df_single)
+      features_df[window] = pd.DataFrame()
+  
+      for segment_number in range(0,len(segments[window])):
           
+          segment_ind = segments[window][segment_number]
+          
+        ## Time
+          segment_duration.append(segment_ind.iloc[-1,0] - segment_ind.iloc[0,0])
+          
+        ## Position  
+          
+          imu_sum.append(segment_ind['angular position'].sum())
+          imu_max.append(np.max(segment_ind['angular position']))
+          imu_diff.append(segment_ind.iloc[-1]['angular position'] - segment_ind.iloc[0]['angular position'])
+          
+        ## Velocity
+          velocity_max.append(np.max(segment_ind['angular velocity']))
+          curr_velocity.append(np.mean(segment_ind.iloc[-30:,-2]))
+          
+        ## Acceleration
+          curr_acc.append(np.mean(segment_ind.iloc[-30:,-1]))#[(len(segments[segment_number])-30):]))
+          
+        ## Stretch
+          stretch_sum.append(segment_ind['stretch'].sum())
+          stretch_max.append(np.max(segment_ind.iloc[:-10,1]))
+          curr_stretch_change.append(np.mean(np.diff(segment_ind['stretch'],1)[(len(segment_ind)-30):]))
+          curr_stretch_change2.append(np.mean(np.diff(segment_ind['stretch'],2)[(len(segment_ind)-30):]))
+          stretch_diff.append(segment_ind.iloc[-1]['stretch'] - segment_ind.iloc[0]['stretch'])
+          #stretch_gradient.append(np.max(np.diff(segments[segment_number].iloc[:-10,1],1)/0.01))
+          
+        ## Biceps
+          
+          biceps_sum.append(segment_ind['biceps'].sum())
+          biceps_max.append(np.max(np.abs(segment_ind['biceps'])))
+          curr_biceps_change.append(np.mean(np.diff(segment_ind['biceps'],1)[(len(segment_ind)-30):]))
+          curr_biceps_change2.append(np.mean(np.diff(segment_ind['biceps'],2)[(len(segment_ind)-30):]))
+          #biceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,3],1)/0.01))
+          biceps_diff.append(segment_ind.iloc[-1]['biceps'] - segment_ind.iloc[0]['biceps'])
+          biceps_min.append(np.min(segment_ind['biceps']))
+          biceps_min_time.append(segment_ind.loc[segment_ind.idxmin()['biceps']]['time']-segment_ind.iloc[0,0])
+           
+        ## Triceps
+          triceps_sum.append(segment_ind['triceps'].sum())
+          triceps_max.append(np.max(np.abs(segment_ind['triceps'])))
+          curr_triceps_change.append(np.mean(np.diff(segment_ind['triceps'],1)[(len(segment_ind)-30):]))
+          curr_triceps_change2.append(np.mean(np.diff(segment_ind['triceps'],2)[(len(segment_ind)-30):]))
+          #triceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,4],1)/0.01))
+          triceps_diff.append(segment_ind.iloc[-1]['triceps'] - segment_ind.iloc[0]['triceps'])
+          triceps_min.append(np.min(segment_ind['triceps']))
         
-  dict = {'curr_triceps_change2': curr_triceps_change2, 'curr_biceps_change2': curr_biceps_change2,\
-          'triceps_min':triceps_min, 'triceps_max':triceps_max,'pecs_sum':pecs_sum,\
-          'biceps_sum':biceps_sum,'biceps_max':biceps_max, 'biceps_min':biceps_min, \
-          'curr_velocity':curr_velocity, 'curr_acc':curr_acc, \
-          'segment_duration': segment_duration,'deltoid_sum':deltoid_sum,\
-          'stretch_max':stretch_max}
+        ## Deltoid
+          deltoid_sum.append(segment_ind['deltoid'].sum())
+          deltoid_max.append(np.max(np.abs(segment_ind['deltoid'])))
+          #deltoid_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,5],1)/0.01))
+          deltoid_diff.append(segment_ind.iloc[-1]['deltoid'] - segment_ind.iloc[0]['deltoid'])
+          deltoid_min.append(np.min(segment_ind['deltoid']))
+          
+        ## Pecs
+          pecs_sum.append(segment_ind['pecs'].sum())
+          #pecs_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,6],1)/0.01))
+         
+          """ 
+          Define segment length, split into 6 evenly spaced points
+          Features of each point for each sensor (6):
+            1. time
+            2. position
+            3. velocity 
+            4. acceleration
+            = 24 features
+            
+            + mean
+            + var
+          """
+          
+          stretch_mean.append(np.mean(segment_ind['stretch']))
+          bb_mean.append(np.mean(segment_ind['biceps']))
+          tb_mean.append(np.mean(segment_ind['triceps']))
+          ad_mean.append(np.mean(segment_ind['deltoid']))
+          pm_mean.append(np.mean(segment_ind['pecs']))
+          
+          stretch_var.append(np.var(segment_ind['stretch']))
+          bb_var.append(np.var(segment_ind['biceps']))
+          tb_var.append(np.var(segment_ind['triceps']))
+          ad_var.append(np.var(segment_ind['deltoid']))
+          pm_var.append(np.var(segment_ind['pecs']))
+        
+          segment_ind['time'] = np.round([i - segment_ind['time'].iloc[0] for i in segment_ind['time']],2)
+        
+          segment_length = len(segment_ind) # in samples
+          indicies = np.round(np.linspace(0,segment_length-1, 6)).astype(int)
+          features_df_ravel = pd.DataFrame(np.array(segment_ind.iloc[indicies,:]).ravel())
+          features_df_single = features_df_ravel.T
+          features_df_single.columns = col
+          
+          features_df_single['Peak Amplitude'] = df['amplitude_change'][segment_number] #np.array(df['amplitude_change'])
+          features_df_single['Peak Velocity'] = df['peak_velocity'][segment_number]
+          features_df_single['Mean Velocity'] = df['mean_velocity'][segment_number]
+          features_df_single['T_end'] = df['time_end'][segment_number]
+          features_df_single['T_half'] = df['time_half'][segment_number]
+          features_df_single['Subject_Num'] = int(filename)
+          features_df_single['Trial_Num'] = int(trial_num)
+        
+          features_df[window] = features_df[window].append(features_df_single)
+              
+        
+      dict = {'curr_triceps_change2': curr_triceps_change2, 'curr_biceps_change2': curr_biceps_change2,\
+              'triceps_min':triceps_min, 'triceps_max':triceps_max,'pecs_sum':pecs_sum,\
+              'biceps_sum':biceps_sum,'biceps_max':biceps_max, 'biceps_min':biceps_min, \
+              'curr_velocity':curr_velocity, 'curr_acc':curr_acc, \
+              'segment_duration': segment_duration,'deltoid_sum':deltoid_sum,\
+              'stretch_max':stretch_max}
+          
    
       # 'stretch_gradient':stretch_gradient,
       
@@ -666,8 +717,9 @@ def extract_features(segments, df):
       #'window_max_velocity':velocity_max, 'curr_velocity':curr_velocity, 'curr_acc':curr_acc, 'biceps_diff':biceps_diff, 'imu_diff':imu_diff, 'biceps_min':biceps_min, 'biceps_min_time':biceps_min_time } #{'biceps_sum':biceps_sum, 'biceps_max':biceps_max, 'biceps_gradient':biceps_gradient, 'triceps_gradient':triceps_gradient,'stretch_gradient':stretch_gradient, 'imu_diff':imu_diff, 'curr_velocity':curr_velocity, 'curr_acc':curr_acc }
       #'deltoid_gradient':deltoid_gradient, 'pecs_gradient':pecs_gradient, 'imu_max':imu_max, 'stretch_gradient':stretch_gradient,'stretch_max':stretch_max} # 'stretch_gradient':stretch_gradient, 'window_max_velocity':velocity_max'stretch_gradient':stretch_gradient 'imu_diff':imu_diff 'window_max_velocity':velocity_max}  #'stretch_diff':stretch_gradient #stretch_diff':stretch_diff} #'velocity_max':velocity_max, 'biceps_max':biceps_max, 'triceps_diff':triceps_diff, 'deltoid_diff':deltoid_diff 'velocity_max':velocity_max 'stretch_diff':stretch_diff,'imu_diff':imu_diff,  'triceps_sum':triceps_sum,'deltoid_sum':deltoid_sum,'pecs_sum':pecs_sum,'amplitude':amplitude}
       
-  #df2 = pd.DataFrame(dict) 
-  
+      df_selected_features[window] = pd.DataFrame(dict) 
+      
+   
   
   # features_df['stretch_mean'] = stretch_mean
   # features_df['bb_mean'] = bb_mean
@@ -681,27 +733,30 @@ def extract_features(segments, df):
   # features_df['ad_var'] = ad_var
   # features_df['pm_var'] = pm_var
       
+
+
+  #df2 = features_df.copy()
+  
+  # df2.columns = col
       
-  df2 = features_df
-      
-    #df2['End Window Time'] = time_3degrees
+  #   #df2['End Window Time'] = time_3degrees
        
-    #df['peak_segment_velocity'] = peak_segment_velocity
-  df2['Peak Amplitude'] = np.array(df['amplitude_change'])
-  df2['Peak Velocity'] = np.array(df['peak_velocity'])
-  df2['Mean Velocity'] = np.array(df['mean_velocity'])
+  #   #df['peak_segment_velocity'] = peak_segment_velocity
+  # df2['Peak Amplitude'] = np.array(df['amplitude_change'])
+  # df2['Peak Velocity'] = np.array(df['peak_velocity'])
+  # df2['Mean Velocity'] = np.array(df['mean_velocity'])
     
-    #df['Time at half traj'] = time_half
-  df2['Time at end'] = np.array(df['time_end'])
-  df2['Time at half'] = np.array(df['time_half'])
-  df2 = df2.reset_index(drop=True)
+  #   #df['Time at half traj'] = time_half
+  # df2['Time at end'] = np.array(df['time_end'])
+  # df2['Time at half'] = np.array(df['time_half'])
+  # df2 = df2.reset_index(drop=True)
       
-    #df2 = df2[(np.abs(stats.zscore(df2)) < 2).all(axis=1)]
+  #   #df2 = df2[(np.abs(stats.zscore(df2)) < 2).all(axis=1)]
     
-  #sns.pairplot(df2)
-  #plt.show()
+  # #sns.pairplot(df2)
+  # #plt.show()
       
-  return df2
+  return features_df, df_selected_features,col
 
 def MLR(df):
 
@@ -1068,70 +1123,70 @@ def Support_Vector_Regression(df):
     
     return X_train, X_train_scaled, y_train, X_test2,y_test, clf4, clf2
     
-def predict_values(dataset,clf,clf2,min_max_scaler, min_max_scaler2):
+# def predict_values(dataset,clf,clf2,min_max_scaler, min_max_scaler2):
     
-    dataset2 = dataset.drop(['Peak Amplitude','Peak Velocity','Mean Velocity','Time at end'],axis=1)
+#     dataset2 = dataset.drop(['Peak Amplitude','Peak Velocity','Mean Velocity','Time at end'],axis=1)
     
-    scaled_velocity = min_max_scaler.transform(dataset2)
-    scaled_amplitude = min_max_scaler2.transform(dataset2)
+#     scaled_velocity = min_max_scaler.transform(dataset2)
+#     scaled_amplitude = min_max_scaler2.transform(dataset2)
     
-    velocity_prediction = clf.predict(scaled_velocity)
-    amplitude_prediction = clf2.predict(scaled_amplitude)
+#     velocity_prediction = clf.predict(scaled_velocity)
+#     amplitude_prediction = clf2.predict(scaled_amplitude)
     
-    df_predictions = dataset.copy() 
+#     df_predictions = dataset.copy() 
     
-    df_predictions['velocity_prediction'] = velocity_prediction
-    #df_predictions['amplitude_prediction'] = amplitude_prediction
-    df_predictions['Time at end prediction'] = amplitude_prediction
+#     df_predictions['velocity_prediction'] = velocity_prediction
+#     #df_predictions['amplitude_prediction'] = amplitude_prediction
+#     df_predictions['Time at end prediction'] = amplitude_prediction
 
-    return df_predictions
+#     return df_predictions
 
-def evaluate(df_predictions_SVM):
+# def evaluate(df_predictions_SVM):
     
-    from sklearn import metrics
-    import seaborn as sns
-    import numpy as np
-    import matplotlib.pyplot as plt
+#     from sklearn import metrics
+#     import seaborn as sns
+#     import numpy as np
+#     import matplotlib.pyplot as plt
         
-    plt.figure(figsize=(10,5))
-    plt.subplot(1,2,1)
-    plt.scatter(df_predictions_SVM['Time at end'],df_predictions_SVM['Mean Velocity'])
-    plt.scatter(df_predictions_SVM['Time at end prediction'],df_predictions_SVM['velocity_prediction'])
-    plt.xlabel('Total Trajectory Duration')
-    plt.ylabel('Mean Trajectory Velocity')
-    plt.legend(['Real','predicted'])
+#     plt.figure(figsize=(10,5))
+#     plt.subplot(1,2,1)
+#     plt.scatter(df_predictions_SVM['Time at end'],df_predictions_SVM['Mean Velocity'])
+#     plt.scatter(df_predictions_SVM['Time at end prediction'],df_predictions_SVM['velocity_prediction'])
+#     plt.xlabel('Total Trajectory Duration')
+#     plt.ylabel('Mean Trajectory Velocity')
+#     plt.legend(['Real','predicted'])
     
-    time_at_end_err = 100*(df_predictions_SVM['Time at end prediction']-df_predictions_SVM['Time at end'])/df_predictions_SVM['Time at end']
-    mean_velocity_err = 100*(df_predictions_SVM['velocity_prediction']-df_predictions_SVM['Mean Velocity'])/df_predictions_SVM['Mean Velocity']
+#     time_at_end_err = 100*(df_predictions_SVM['Time at end prediction']-df_predictions_SVM['Time at end'])/df_predictions_SVM['Time at end']
+#     mean_velocity_err = 100*(df_predictions_SVM['velocity_prediction']-df_predictions_SVM['Mean Velocity'])/df_predictions_SVM['Mean Velocity']
     
-    plt.subplot(1,2,2)
-    plt.scatter(time_at_end_err, mean_velocity_err)
-    plt.xlabel('Total Trajectory Duration % Error')
-    plt.ylabel('Mean Trajectory Velocity % Error')
+#     plt.subplot(1,2,2)
+#     plt.scatter(time_at_end_err, mean_velocity_err)
+#     plt.xlabel('Total Trajectory Duration % Error')
+#     plt.ylabel('Mean Trajectory Velocity % Error')
     
-    plt.show()
+#     plt.show()
     
-    print('Duration:\n')
-    print('MAE:', metrics.mean_absolute_error(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
-    print('MSE:', metrics.mean_squared_error(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
-    print('RMSE:', np.sqrt(metrics.mean_squared_error(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction'])))
+#     print('Duration:\n')
+#     print('MAE:', metrics.mean_absolute_error(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
+#     print('MSE:', metrics.mean_squared_error(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
+#     print('RMSE:', np.sqrt(metrics.mean_squared_error(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction'])))
     
-    #print(clf.score(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
-    #print(clf.coef_)
+#     #print(clf.score(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
+#     #print(clf.coef_)
                 
-    sns.lmplot(x= 'Time at end',y = 'Time at end prediction', data = df_predictions_SVM)
+#     sns.lmplot(x= 'Time at end',y = 'Time at end prediction', data = df_predictions_SVM)
     
-    print('Mean Velocity:\n')
+#     print('Mean Velocity:\n')
     
-    print('MAE:', metrics.mean_absolute_error(df_predictions_SVM['Mean Velocity'], df_predictions_SVM['velocity_prediction']))
-    print('MSE:', metrics.mean_squared_error(df_predictions_SVM['Mean Velocity'], df_predictions_SVM['velocity_prediction']))
-    print('RMSE:', np.sqrt(metrics.mean_squared_error(df_predictions_SVM['Mean Velocity'], df_predictions_SVM['velocity_prediction'])))
+#     print('MAE:', metrics.mean_absolute_error(df_predictions_SVM['Mean Velocity'], df_predictions_SVM['velocity_prediction']))
+#     print('MSE:', metrics.mean_squared_error(df_predictions_SVM['Mean Velocity'], df_predictions_SVM['velocity_prediction']))
+#     print('RMSE:', np.sqrt(metrics.mean_squared_error(df_predictions_SVM['Mean Velocity'], df_predictions_SVM['velocity_prediction'])))
     
-    #print(clf.score(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
-    #print(clf.coef_)
+#     #print(clf.score(df_predictions_SVM['Time at end'], df_predictions_SVM['Time at end prediction']))
+#     #print(clf.coef_)
                 
-    sns.lmplot(x= 'Mean Velocity',y = 'velocity_prediction', data = df_predictions_SVM)
-    plt.show()
+#     sns.lmplot(x= 'Mean Velocity',y = 'velocity_prediction', data = df_predictions_SVM)
+#     plt.show()
     
 def mjtg(current, setpoint, frequency, move_time):
     trajectory = []
@@ -1358,8 +1413,8 @@ def detect_outliers(df,n,features):
     
     return multiple_outliers 
     
-
-def baseline_regression_models(X_train, y_train, kfolds=0, n_jobs=1):
+#%% Regression models
+def baseline_regression_models(X_train, y_train, mean_val, kfolds=0, n_jobs=1, combined = 0):
     
     classifiers = []
     classifiers.append(SVR())
@@ -1383,19 +1438,65 @@ def baseline_regression_models(X_train, y_train, kfolds=0, n_jobs=1):
     cv_means = []
     cv_std = []
     for cv_result in cv_results:
-        cv_means.append(cv_result.mean())
-        cv_std.append(cv_result.std())
+        cv_means.append(cv_result.mean()*100/mean_val)
+        cv_std.append(cv_result.std()*100/mean_val)
     
     cv_res = pd.DataFrame({"CrossValMeans":cv_means,"CrossValerrors": cv_std,"Algorithm":["SVR","DecisionTree","AdaBoost",
     "RandomForest","ExtraTrees","GradientBoosting","MultipleLayerPerceptron","ElasticNet","Lasso","Ridge"]})
     
     plt.figure()
     g = sns.barplot("CrossValMeans","Algorithm",data = cv_res.sort_values('CrossValMeans'), palette="Set3",orient = "h",**{'xerr':cv_std})
-    g.set_xlabel("Mean Error")
-    g = g.set_title("Cross validation scores")
+    g.set_xlabel("Mean % Error")
+    #g = g.set_title("Cross validation scores{}".format(mean_val))
+    
+    RFR = RandomForestRegressor(random_state=42)
+    RFR.fit(X_train,y_train)
+    #cross_val_error_ht.append(np.mean(-cross_val_score(baseline, X_train, y_train_mv, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))*100/mean_mean_velocity)
 
-    print(cv_res.sort_values('CrossValMeans'))
-    return cv_res.sort_values('CrossValMeans')
+    predictors = list(X_train)
+    feat_imp = pd.Series(RFR.feature_importances_, predictors).sort_values(ascending=False)
+    feat_imp.plot(kind='bar', title='Importance of Features')
+    
+    time_imp = 0
+    imu_imp = 0
+    stretch_imp = 0
+    emg_imp = 0
+    
+    print(cv_res.sort_values('CrossValMeans').reset_index(drop=True))
+    
+    if combined ==1:
+    
+        for item in feat_imp.index:
+            #print(item)
+            
+            x = feat_imp.loc[item]
+            
+            if 'time' in item:
+                
+                time_imp = time_imp + x
+                
+            if 'pos' in item or 'vel' in item or 'acc' in item:
+                
+                imu_imp = imu_imp + x
+                
+            if 'stretch' in item:
+                
+                stretch_imp = stretch_imp + x
+            
+            if 'bb' in item or 'tb' in item  or 'ad' in item or 'pm' in item:
+                
+                emg_imp = emg_imp + x
+        
+        sensor_imp_lst = [time_imp, imu_imp, stretch_imp, emg_imp]
+    
+        sensor_imp = pd.Series(sensor_imp_lst,['time','imu','stretch','emg' ])
+    
+    
+        return cv_res.sort_values('CrossValMeans').reset_index(drop=True), feat_imp, sensor_imp
+    
+    return cv_res.sort_values('CrossValMeans').reset_index(drop=True), feat_imp
+    
+    
 
 
 

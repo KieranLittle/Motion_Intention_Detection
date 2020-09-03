@@ -22,14 +22,27 @@ from scipy import stats
 
 import sys
 import os
+import pickle
 
 #%% Read data
 
-dataset = pd.read_csv(r'data/03_processed/data_processed')
+dataset = pd.read_csv(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/data_processed')
+
+
+file = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/dict.datasets','rb')
+
+# dump information to that file
+dataset_dict = pickle.load(file)
+
+# close the file
+file.close()
 
 #%% Train Test Split
 
 X = dataset.drop(['peak_amplitude','peak_velocity','mean_velocity','time_end', 'time_half'],axis=1)
+
+#X = X_reduced #####CHANGE
+
 y = dataset[['peak_velocity','time_half','peak_amplitude','mean_velocity']]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=42)
@@ -41,6 +54,12 @@ y_train_pa = y_train['peak_amplitude']
 y_test_dur = y_test['time_half']
 y_test_mv = y_test['mean_velocity']
 y_test_pa = y_test['peak_amplitude']
+
+mean_peak_velocity = y.peak_velocity.mean()
+mean_time_half = y.time_half.mean()
+mean_peak_amplitude = y.peak_amplitude.mean()
+mean_mean_velocity = y.mean_velocity.mean()
+
 
 #%% Visualisations
 
@@ -56,6 +75,28 @@ X_test = pca.transform(X_test)
 
 pca.n_components_
 
+#%%
+
+## TEST NEW DATASET
+X = dataset_dict[0].drop(['Peak Amplitude','Peak Velocity','Mean Velocity','T_end', 'T_half'],axis=1)
+    
+y = dataset_dict[0][['Peak Amplitude','Peak Velocity','Mean Velocity', 'T_half']]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+
+y_train_dur = y_train['T_half']
+y_train_mv = y_train['Mean Velocity']
+y_train_pa = y_train['Peak Amplitude']
+        
+y_test_dur = y_test['T_half']
+y_test_mv = y_test['Mean Velocity']
+y_test_pa = y_test['Peak Amplitude']
+    
+#mean_peak_velocity = y.peak_velocity.mean()
+mean_time_half = y.T_half.mean()
+mean_peak_amplitude = y['Peak Amplitude'].mean()
+mean_mean_velocity = y['Mean Velocity'].mean()
+
 #%% Modelling
 
 ### Scaling
@@ -69,9 +110,9 @@ pca.n_components_
 
 kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
 
-baseline_regression_models(X_train, y_train_mv, kfolds)
-baseline_regression_models(X_train, y_train_dur, kfolds)
-baseline_regression_models(X_train, y_train_pa, kfolds)
+cv_res_df_mv = baseline_regression_models(X_train, y_train_mv, mean_mean_velocity, kfolds)
+# cv_res_df_ht =  baseline_regression_models(X_train, y_train_dur, mean_time_half, kfolds)
+# cv_res_df_pa =  baseline_regression_models(X_train, y_train_pa, mean_peak_amplitude, kfolds)
 
 #  Best baseline model for velocity: 
 #     1. RidgeCV
@@ -87,13 +128,337 @@ baseline_regression_models(X_train, y_train_pa, kfolds)
 #     4. Adaboost
 #     5. Gradient Boosting
 
+#%%
+
+predictors=list(X_train)
+
+imu_col = []
+stretch_col = []
+emg_col = []
+
+for i in range(1,7):
+    imu_col.append('time{}'.format(i))
+    imu_col.append('pos{}'.format(i))
+    imu_col.append('vel{}'.format(i))
+    imu_col.append('acc{}'.format(i))
+    
+    stretch_col.append('time{}'.format(i))
+    stretch_col.append('stretch{}'.format(i))
+    
+    emg_col.append('time{}'.format(i))
+    emg_col.append('bb{}'.format(i))
+    emg_col.append('tb{}'.format(i))
+    emg_col.append('ad{}'.format(i))
+    emg_col.append('pm{}'.format(i))
+    
+    
+#%%
+
+for i in 
+X = dataset_dict[0].drop(['Peak Amplitude','Peak Velocity','Mean Velocity','T_end', 'T_half'],axis=1)
+    
+y = dataset_dict[0][['Peak Amplitude','Peak Velocity','Mean Velocity', 'T_half']]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+
+#%%
+
+X_train = X_train[imu_col]
+X_test = X_test[imu_col]
+
+#%%
+X_train = X_train[stretch_col]
+X_test = X_test[stretch_col]
+
+#%%
+
+X_train = X_train[emg_col]
+X_test = X_test[emg_col]
+
+
+#%%
+RFR = RandomForestRegressor(random_state=42)
+RFR.fit(X_train,y_train_mv)
+feat_imp = pd.Series(RFR.feature_importances_, predictors).sort_values(ascending=False)[:20]
+feat_imp.plot(kind='bar', title='Importance of Features')
+
+pred=RFR.predict(X_test)
+print('Test Error = ',np.mean(abs(pred-y_test_mv))*100/mean_mean_velocity)
+
+cross_val_error = np.mean(-cross_val_score(baseline, X_train, y_train_mv, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))*100/mean_mean_velocity
+
+print('Cross Validation Error =',cross_val_error)
+
+
+#%% Make a loop to test all datasets
+
+#from statistics import mean
+
+kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
+n_jobs=2
+i=0
+cv_means = []
+cv_std = []
+cv_results = {}
+
+cv_res_df_mv_comb = {}
+cv_res_df_ht_comb = {}
+cv_res_df_pa_comb = {}
+
+feat_imp_mv_comb = {}
+feat_imp_ht_comb = {}
+feat_imp_pa_comb = {}
+
+sensor_imp_mv_comb = {}
+sensor_imp_ht_comb = {}
+sensor_imp_pa_comb = {}
+
+cv_res_df_mv_imu = {}
+feat_imp_mv_imu = {}
+
+cv_res_df_ht_imu = {}
+feat_imp_ht_imu = {}
+ 
+cv_res_df_pa_imu = {}
+feat_imp_pa_imu = {}
+
+cv_res_df_mv_stretch = {}
+feat_imp_mv_stretch = {}
+
+cv_res_df_ht_stretch = {}
+feat_imp_ht_stretch = {}
+
+cv_res_df_pa_stretch = {}
+feat_imp_pa_stretch = {}
+
+cv_res_df_mv_emg= {}
+feat_imp_mv_emg = {}
+
+cv_res_df_ht_emg = {}
+feat_imp_ht_emg= {} 
+
+cv_res_df_pa_emg = {}
+feat_imp_pa_emg = {}
+
+
+#%%
+i = 0
+
+for dataset_slt in dataset_dict.values():    
+    
+    X = dataset_slt.drop(['Peak Amplitude','Peak Velocity','Mean Velocity','T_end', 'T_half'],axis=1)
+    y = dataset_slt[['Peak Amplitude','Peak Velocity','Mean Velocity', 'T_half']]
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+    
+    y_train_dur = y_train['T_half']
+    y_train_mv = y_train['Mean Velocity']
+    y_train_pa = y_train['Peak Amplitude']
+        
+    y_test_dur = y_test['T_half']
+    y_test_mv = y_test['Mean Velocity']
+    y_test_pa = y_test['Peak Amplitude']
+    
+    #mean_peak_velocity = y.peak_velocity.mean()
+    mean_time_half = y.T_half.mean()
+    mean_peak_amplitude = y['Peak Amplitude'].mean()
+    mean_mean_velocity = y['Mean Velocity'].mean()
+    
+    X_train_imu = X_train[imu_col]
+    X_test_imu = X_test[imu_col]
+    
+    X_train_stretch = X_train[stretch_col]
+    X_test_stretch = X_test[stretch_col]
+    
+    X_train_emg = X_train[emg_col]
+    X_test_emg = X_test[emg_col]
+    
+    ## ALL SIGNALS
+    cv_res_df_mv_comb[i],feat_imp_mv_comb[i], sensor_imp_mv_comb[i] =  baseline_regression_models(X_train, y_train_mv, mean_mean_velocity, kfolds, combined=1)
+    cv_res_df_ht_comb[i],feat_imp_ht_comb[i], sensor_imp_ht_comb[i] =  baseline_regression_models(X_train, y_train_dur, mean_time_half, kfolds, combined=1)
+    cv_res_df_pa_comb[i],feat_imp_pa_comb[i], sensor_imp_pa_comb[i] =  baseline_regression_models(X_train, y_train_pa, mean_peak_amplitude, kfolds, combined=1)
+    
+    # ## IMU
+    cv_res_df_mv_imu[i],feat_imp_mv_imu[i]  =  baseline_regression_models(X_train_imu, y_train_mv, mean_mean_velocity, kfolds)
+    cv_res_df_ht_imu[i],feat_imp_ht_imu[i] =  baseline_regression_models(X_train_imu, y_train_dur, mean_time_half, kfolds)
+    cv_res_df_pa_imu[i],feat_imp_pa_imu[i] =  baseline_regression_models(X_train_imu, y_train_pa, mean_peak_amplitude, kfolds)
+    
+    # ## Stretch 
+    cv_res_df_mv_stretch[i], feat_imp_mv_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_mv, mean_mean_velocity, kfolds)
+    cv_res_df_ht_stretch[i], feat_imp_ht_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_dur, mean_time_half, kfolds)
+    cv_res_df_pa_stretch[i], feat_imp_pa_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_pa, mean_peak_amplitude, kfolds)
+    
+    # # EMG
+    cv_res_df_mv_emg[i], feat_imp_mv_emg[i] =  baseline_regression_models(X_train_emg, y_train_mv, mean_mean_velocity, kfolds)
+    cv_res_df_ht_emg[i], feat_imp_ht_emg[i] =  baseline_regression_models(X_train_emg, y_train_dur, mean_time_half, kfolds)
+    cv_res_df_pa_emg[i], feat_imp_pa_emg[i] =  baseline_regression_models(X_train_emg, y_train_pa, mean_peak_amplitude, kfolds)
+    
+    
+    i+=1
+
+#%%
+
+comb_results = {}
+comb_results['cv_res_mv'] = cv_res_df_mv_comb
+comb_results['feat_imp_mv'] = feat_imp_mv_comb
+comb_results['sensor_imp_mv'] = sensor_imp_mv_comb
+
+comb_results['cv_res_ht'] = cv_res_df_ht_comb
+comb_results['feat_imp_ht'] = feat_imp_ht_comb
+comb_results['sensor_imp_ht'] = sensor_imp_ht_comb
+
+comb_results['cv_res_pa'] = cv_res_df_pa_comb
+comb_results['feat_imp_pa'] = feat_imp_pa_comb
+comb_results['sensor_imp_pa'] = sensor_imp_pa_comb
+
+imu_results = {}
+imu_results['cv_res_mv'] = cv_res_df_mv_imu
+imu_results['feat_imp_mv'] = feat_imp_mv_imu
+
+imu_results['cv_res_ht'] = cv_res_df_ht_imu
+imu_results['feat_imp_ht'] = feat_imp_ht_imu
+
+imu_results['cv_res_pa'] = cv_res_df_pa_imu
+imu_results['feat_imp_pa'] = feat_imp_pa_imu
+
+stretch_results = {}
+stretch_results['cv_res_mv'] = cv_res_df_mv_stretch
+stretch_results['feat_imp_mv'] = feat_imp_mv_stretch
+
+stretch_results['cv_res_ht'] = cv_res_df_ht_stretch
+stretch_results['feat_imp_ht'] = feat_imp_ht_stretch
+
+stretch_results['cv_res_pa'] = cv_res_df_pa_stretch
+stretch_results['feat_imp_pa'] = feat_imp_pa_stretch
+
+emg_results = {}
+emg_results['cv_res_mv'] = cv_res_df_mv_emg
+st_results['feat_imp_mv'] = feat_imp_mv_emg
+
+stretch_results['cv_res_ht'] = cv_res_df_ht_emg
+stretch_results['feat_imp_ht'] = feat_imp_ht_emg
+
+stretch_results['cv_res_pa'] = cv_res_df_pa_emg
+stretch_results['feat_imp_pa'] = feat_imp_pa_emg
+
+
+#%%
+
+
+
+desired_filename_lst = ['dict.cv_res_df_mv_comb','feat_imp_mv_comb','sensor_imp_mv_comb','cv_res_df_ht_comb
+
+pickle_out = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/results/{}'.format(desired_filename),"wb")
+pickle.dump(cv_res_df_mv_comb, pickle_out)
+pickle_out.close()  
+
+
+
+#%%
+
+time_imp = 0
+imu_imp = 0
+stretch_imp = 0
+emg_imp = 0
+
+
+for item in feat_imp_mv_comb[7].index:
+    print(item)
+    
+    x = feat_imp_mv_comb[7].loc[item]
+    
+    if 'time' in item:
+        print('TIME FOUND')
+        
+        time_imp = time_imp + x
+        
+    elif 'pos' in item or 'vel' in item or 'acc' in item:
+        print('IMU FOUND')
+        
+        imu_imp = imu_imp + x
+        
+    elif 'stretch' in item:
+        print('Stretch found')
+        
+        stretch_imp = stretch_imp + x
+    
+    elif 'bb' in item or 'tb' in item or 'ad' in item or 'pm' in item:
+        print('Emg found')
+        
+        emg_imp = emg_imp + x
+        
+sensor_imp_lst = [time_imp, imu_imp, stretch_imp, emg_imp]
+
+sensor_imp = pd.Series(sensor_imp_lst ,['time','imu','stretch','emg' ])
+        
+#%%
+
+angles = [2,5,10,15]
+
+best_scores_mv = []
+best_scores_ht = []
+best_scores_pa = []
+
+for i in range(0,len(angles)):
+
+    best_scores_mv.append(cv_res_df_mv[i].loc[0].CrossValMeans)
+    best_scores_ht.append(cv_res_df_ht[i].loc[0].CrossValMeans)
+    best_scores_pa.append(cv_res_df_pa[i].loc[0].CrossValMeans)
+    
+plt.figure(1)
+plt.plot(angles,best_scores_mv)
+plt.plot(angles,best_scores_ht)
+plt.plot(angles,best_scores_pa)
+
+
+
+#%% TUNING OF BEST MODELS TO CHECK IMPROVMENT
+   
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report
+#from sklearn.grid_search import GridSearchCV 
+
+kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
+
+X = dataset_dict[0].drop(['Peak Amplitude','Peak Velocity','Mean Velocity','T_end', 'T_half'],axis=1)
+y = dataset_dict[0][['Peak Amplitude','Peak Velocity','Mean Velocity', 'T_half']]
+    
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+    
+y_train_dur = y_train['T_half']
+y_train_mv = y_train['Mean Velocity']
+y_train_pa = y_train['Peak Amplitude']
+        
+y_test_dur = y_test['T_half']
+y_test_mv = y_test['Mean Velocity']
+y_test_pa = y_test['Peak Amplitude']
+
+mean_time_half = y.T_half.mean()
+mean_peak_amplitude = y['Peak Amplitude'].mean()
+mean_mean_velocity = y['Mean Velocity'].mean()
+
+baseline = GradientBoostingRegressor(learning_rate=0.1, n_estimators=100,max_depth=3, min_samples_split=2, min_samples_leaf=1, subsample=1,max_features='sqrt', random_state=10)
+baseline.fit(X_train,y_train_mv)
+predictors=list(X_train)
+feat_imp = pd.Series(baseline.feature_importances_, predictors).sort_values(ascending=False)[:10]
+feat_imp.plot(kind='bar', title='Importance of Features')
+plt.ylabel('Feature Importance Score')
+print('Accuracy of the GBM on test set: {:.3f}'.format(baseline.score(X_test, y_test_mv)))
+pred=baseline.predict(X_test)
+print('Test Error = ',np.mean(abs(pred-y_test_mv))*100/mean_mean_velocity)
+
+cross_val_error = np.mean(-cross_val_score(baseline, X_train, y_train_mv, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))*100/mean_mean_velocity
+
+print('Cross Validation Error =',cross_val_error)
+
+
 #%% Hyper parameter tuning
 
 GBR = GradientBoostingRegressor()
 
-GBR.fit(X_train, y_train_pa)
+GBR.fit(X_train, y_train_mv)
 
-plt.scatter(y_test_pa, GBR.predict(X_test))
+plt.scatter(y_test_mv, GBR.predict(X_test))
 plt.plot([0,175],[0,175],'r')
 
 #%%
@@ -134,7 +499,7 @@ parameter_space = {
 MLPR = MLPRegressor()
 
 MLPR = GridSearchCV(MLPR, parameter_space, n_jobs=-1, cv=kfolds, scoring = "neg_mean_absolute_error")
-MLPR.fit(X_train, y_train_dur)
+MLPR.fit(X_train, y_train_mv)
 
 print("The best value of MLP is: ",MLPR.best_params_)
 print("Score: " ,-MLPR.best_score_)
@@ -146,7 +511,7 @@ b = np.max(y)
 
 
 plt.scatter(y_test_dur,MLPR.predict(X_test))
-plt.plot([i for i in range(0.5,2.5)],[i for i in range(0.5,2.5)],'r')
+#plt.plot([i for i in range(0.5,2.5)],[i for i in range(0.5,2.5)],'r')
 
 
 
@@ -200,18 +565,25 @@ RF_best =  rf_random.best_estimator_.feature_importances_
 np.mean(-cross_val_score(rf_random.best_estimator_, X_train, y_train_mv, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=1))
 
 #series = pd.Series(lst)
-indices = np.argsort(RF_best)[::-1][:20]
+indices = np.argsort(RF_best)[::-1][:10]
 
 g = sns.barplot(y = X_train.columns[indices], x = RF_best[indices])
 #g = sns.barplot(x = ['1','2','3','4','5'], y = RF_best[indices])
 
 #%%
+X_reduced = X[X.columns[indices]]
+
+
+
+#%%
 ### META MODELING  WITH ADABOOST, RF, EXTRATREES and GRADIENTBOOSTING
+
 
 # Adaboost
 DTR = DecisionTreeRegressor()
 
-adaDTR = AdaBoostClassifier(DTR) #random_state=7)
+adaDTR = AdaBoostRegressor(DTR) #random_state=7)
+#adaDTR = AdaBoostClassifier(DTR) #random_state=7)
 
 ada_param_grid = {
               'n_estimators': (1, 2),
@@ -220,7 +592,7 @@ ada_param_grid = {
 
 gsadaDTR = GridSearchCV(adaDTR,param_grid = ada_param_grid, cv=kfolds, scoring="neg_mean_absolute_error", verbose = 1)
 
-gsadaDTR.fit(X_train,y_train['Mean Velocity'])
+gsadaDTR.fit(X_train,y_train_mv)
 
 ada_best = gsadaDTR.best_estimator_
 
@@ -234,7 +606,7 @@ fig, axes = plt.subplots(nrows = nrows, ncols = ncols, sharex="all", figsize=(15
 
 ada_best = 
 ExtC_best = 
-RFC_best = 
+RFC_best = RF_best
 GBC_best = 
 
 
@@ -299,6 +671,7 @@ plt.plot(traj1)
 
 plot_predicted_traj(X_test,test_trajectories) #df_predictions_SVM
 #plt.savefig('predicted_and_real_traj_40%.svg', format='svg')
+
 
 #%%
 plt.plot(test_trajectories[30]['time'], test_trajectories[30]['angular position'])
