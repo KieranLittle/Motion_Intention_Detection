@@ -5,7 +5,7 @@ Created on Thu Jan 30 13:17:40 2020
 
 @author: Kieran
 """
-
+import pandas as pd
 import numpy as np
 from collections import Counter
 from sklearn import preprocessing
@@ -28,35 +28,63 @@ from sklearn.pipeline import make_pipeline
 
 def read_file(sub_num, trial_num):
     
+    """
+    1. Read in the files using the subject number and the trial number
+    2. Removes repeated values from the amplitudes command
+    3. Labels axes and combines dataframes into one
+    
+    Input: 
+        sub_num: subject number used to label data folder
+        trial_num: the number of the trial
+        
+    Output:
+        combined_dataset: data combined into one dataframe (for 1 trial, 1 subject)
+    
+    """
+    
     import pandas as pd
     
     global amplitudes
     
+    # Define path to the data
     path = 'data/01_raw/sub_'+sub_num
     
+    # Read in the different files
+    # (the stretch signal and the imu and combined)
+    # emg_MVC (MVC = Maximum Voluntary Contraction): this file is used to normalise the muscle activity between subjects
     
     stretch_imu = pd.read_csv(path+'/imu/Trial'+trial_num+'.csv', header=None)
     emg = pd.read_csv(path+'/emg/Trial'+trial_num+'.csv', header=None)#'/emg/Trial4_emg.csv'
     amplitude = pd.read_csv(path+'/Trajectory.csv', header=None)
     emg_MVC = pd.read_csv(path+'/emg/MVC.csv', header=None)
     
+    # the amplitude file column: 0 simulation time of the trial, column 1 = amplitude commanded to person
+    
+    # find the commands which are sent to the subject (they repeat for as long as it was shown to the user)
     amplitude2 = amplitude[amplitude.iloc[:,1] != 0]
+    
+    # create a new list to find the order of each command without repeats
     amplitudes = []
     amplitudes.append(amplitude2.iloc[0,1])
-
+    
+    # find if the next command is the same as the previous command
     for i in range(len(amplitude2)-1):
         if (amplitude2.iloc[i,1] != amplitude2.iloc[i+1,1]):
             amplitudes.append(amplitude2.iloc[i+1,1])
     
+    # label columns of emg dataframe
     emg = emg.T
     emg.columns = ['Time','Biceps','Triceps','Deltoid','Pecs']
     
+    # label columns of emg
     emg_MVC = emg_MVC.T
     emg_MVC.columns = ['Time','Biceps','Triceps','Deltoid','Pecs']
 
+    # label columns of stretch and imu dataframe
     stretch_imu = stretch_imu.T
     stretch_imu.columns = ['time','imu','stretch']
     
+    # combine the dataframes into one 
     combined_dataset = stretch_imu
     combined_dataset['Biceps'] = emg['Biceps']
     combined_dataset['Triceps'] = emg['Triceps']
@@ -67,6 +95,11 @@ def read_file(sub_num, trial_num):
 
 def resample(dataset):
     
+    """
+    This function downsamples the signals in the original signals to 100 Hz.
+    
+    """
+    
     import scipy
     import numpy as np
     from scipy import signal
@@ -74,6 +107,8 @@ def resample(dataset):
     
     #a = dataset[dataset['time'] == 1200.0].index
     #dataset.drop(a , inplace=True)
+    
+    # resamples the signals to 100Hz:
     
     dataset = dataset.loc[:200000];
     
@@ -84,11 +119,13 @@ def resample(dataset):
     resampled_D = scipy.signal.resample(dataset.iloc[:,5],120001)
     resampled_P = scipy.signal.resample(dataset.iloc[:,6],120001)
     
+    # Define new time signal
     time = np.linspace(0,12000*0.1,120001)
 
     dataset = pd.DataFrame({'time': time, 'stretch': resampled_stretch, 'imu': resampled_imu, 'biceps': resampled_BB,\
                             'triceps': resampled_TB, 'deltoid': resampled_D, 'pecs': resampled_P})
     
+    # rounds away floating point inaccuracies
     decimals = 2 
     dataset['time'] = dataset['time'].apply(lambda x: round(x, decimals))
     dataset['imu'] = dataset['imu'].apply(lambda x: round(x, decimals))
@@ -96,98 +133,66 @@ def resample(dataset):
     return dataset
     
 
-def filteremg(time, emg, low_pass=10, sfreq=1000, high_band=20, low_band=450, graphs=0):
+def filteremg(time, emg, low_pass=30, sfreq=100, high_band=5, low_band=49, graphs=1):
     import scipy as sp
     import matplotlib.pyplot as plt
     
     
     """
-    time: Time data
+    Create bandpass filter to filter emg, returns filtered emg signal
+    
+    time: time data
     emg: EMG data
     high: high-pass cut off frequency
     low: low-pass cut off frequency
     sfreq: sampling frequency
     """
     
-    # normalise cut-off frequencies to sampling frequency
+    # normalise cut-off to sfreq
     high_band = high_band/(sfreq/2)
     low_band = low_band/(sfreq/2)
     
-    # create bandpass filter for EMG
+    # create bandpass filter
     b1, a1 = sp.signal.butter(4, [high_band,low_band], btype='bandpass')
     
-    # process EMG signal: filter EMG
+    # apply forward backward filtering filtfilt
     emg_filtered = sp.signal.filtfilt(b1, a1, emg)    
     
-    # process EMG signal: rectify
+    # rectify
     emg_rectified = abs(emg_filtered)
     
-    # create lowpass filter and apply to rectified signal to get EMG envelope
+    # apply low pass filter to rectified signal
     low_pass = low_pass/sfreq
     b2, a2 = sp.signal.butter(4, low_pass, btype='lowpass')
     emg_envelope = sp.signal.filtfilt(b2, a2, emg_rectified)
     
     if graphs == 1:
-    
-        # plot graphs
-        fig = plt.figure()
-        plt.subplot(1, 4, 1)
-        plt.subplot(1, 4, 1).set_title('Unfiltered,' + '\n' + 'unrectified EMG')
-        plt.plot(time, emg)
-        plt.locator_params(axis='x', nbins=4)
-        plt.locator_params(axis='y', nbins=4)
-        #plt.ylim(-0.1, 0.1)
-        plt.xlabel('Time (sec)')
-        plt.ylabel('EMG (a.u.)')
         
-        plt.subplot(1, 4, 2)
-        plt.subplot(1, 4, 2).set_title('Filtered,' + '\n' + 'rectified EMG: ' + str(int(high_band*sfreq)) + '-' + str(int(low_band*sfreq)) + 'Hz')
-        plt.plot(time, emg_rectified)
-        plt.locator_params(axis='x', nbins=4)
-        plt.locator_params(axis='y', nbins=4)
-        #plt.ylim(-0.1, 0.1)
-        plt.plot([0.9, 1.0], [1.0, 1.0], 'r-', lw=5)
-        plt.xlabel('Time (sec)')
-    
-        plt.subplot(1, 4, 3)
-        plt.subplot(1, 4, 3).set_title('Filtered, rectified ' + '\n' + 'EMG envelope: ' + str(int(low_pass*sfreq)) + ' Hz')
-        plt.plot(time, emg_envelope)
-        plt.locator_params(axis='x', nbins=4)
-        plt.locator_params(axis='y', nbins=4)
-        #plt.ylim(-0.1, 0.1)
-        plt.plot([0.9, 1.0], [1.0, 1.0], 'r-', lw=5)
-        plt.xlabel('Time (sec)')
+        range_slt = 400
+        plt.subplot(1,2,1)
+        plt.plot(time[0:range_slt],emg[0:range_slt])
         
-        plt.subplot(1, 4, 4)
-        plt.subplot(1, 4, 4).set_title('Focussed region')
-        plt.plot(time[int(0.9*1000):int(1.0*1000)], emg_envelope[int(0.9*1000):int(1.0*1000)])
-        plt.locator_params(axis='x', nbins=4)
-        plt.locator_params(axis='y', nbins=4)
-        plt.xlim(0.9, 1.0)
-        #plt.ylim(-1.5, 1.5)
-        plt.xlabel('Time (sec)')
-    
-        fig_name = 'fig_' + str(int(low_pass*sfreq)) + '.png'
-        fig.set_size_inches(w=11,h=7)
-        fig.savefig(fig_name)
+        plt.subplot(1,2,2)
+        plt.plot(time[0:range_slt],emg_envelope[0:range_slt])
         
         plt.show()
 
- # show what different low pass filter cut-offs do
-#    for i in [3, 10, 40]:
-#            filteremg(time, emg, low_pass=i) #emg_correctmean
     return emg_envelope
 
-def lowpass_filter(time, signal, order=2, low_pass=10, sfreq=1000):
+def lowpass_filter(time, signal, order=1, low_pass=10, sfreq=100):
     
     import scipy as sp
     import matplotlib.pyplot as plt
     
+    """ 
+    create a low pass filter
+    
+    """
     
     # create lowpass filter and apply to rectified signal to get EMG envelope
     low_pass = low_pass/sfreq
-    b, a = sp.signal.butter(1, low_pass, btype='lowpass')
-    filtered_signal = sp.signal.filtfilt(b, a, signal)#imu_rectified)
+    b, a = sp.signal.butter(order, low_pass, btype='lowpass')
+    filtered_signal = sp.signal.filtfilt(b, a, signal) #imu_rectified)
     
     # plt.figure(1, figsize=(15,8))
     # plt.subplot(2,5,1)
@@ -205,40 +210,51 @@ def lowpass_filter(time, signal, order=2, low_pass=10, sfreq=1000):
     
     return filtered_signal
 
-def filter_smooth(old_dataset):
+def filter_derivate(dataset):
+    
+    """
+    1. filter the imu and emg signals in the dataset
+    2. defines the differentials of the imu signal to find velocity and acceleration
+    3. filters the emg signals and finds the derivatives
+    
+    """
     
     import numpy as np
     import matplotlib.pyplot as plt
     
-    #N = 15
-    #imu_smooth = np.convolve(old_dataset['imu'], np.ones((N,))/N, mode='valid')
+    # define new dataset based on the input dataset
+    new_dataset = dataset.copy()
     
-    new_dataset = old_dataset.copy()
-    
+    # filter the imu signal and relabel as the angular position
     new_dataset['angular position'] = lowpass_filter(new_dataset['time'],new_dataset['imu'],3,2,100)
     
+    # drop the old column called 'imu'
     new_dataset.drop('imu',axis=1,inplace=True)
     
+    # define the angular velocity based on the difference between points divided by sampling time
     vel = np.diff(new_dataset['angular position'],1)/0.01
+    
+    # add a last value to the end to make lengths equal
     vel = np.append(vel,0)
     
+    # filter the angular velocity signal
     new_dataset['angular velocity'] = lowpass_filter(new_dataset['time'],vel,2,7,100)
     
+    # define the angular acceleration based on the change in velocity divded by sampling time
     acc = np.diff(new_dataset['angular velocity'],1)/0.01
+    
+    # add 0 to make lengths equal
     acc = np.append(acc,0)
     
+    # filter angular acceleration 
     new_dataset['angular acceleration'] = lowpass_filter(new_dataset['time'],acc,2,9,100)
-    #new_dataset['angular acceleration'] = filteremg(new_dataset['time'],acc,low_pass=5, sfreq=100, high_band=20, low_band=450, graphs=1)
-    
+   
+    # define the stretch derivatives and filter
     new_dataset['stretch'] = lowpass_filter(new_dataset['time'],new_dataset['stretch'],2,4,100)
     new_dataset['stretch_d'] = np.append(np.diff(new_dataset['stretch'],1)/0.01,0)
     new_dataset['stretch_dd'] =np.append(np.diff(new_dataset['stretch_d'],1)/0.01,0)
     
-    
-#    new_dataset.drop(new_dataset.index[0:N-1],inplace=True) 
-#    new_dataset['imu']=imu_smooth
-#    new_dataset.reset_index(drop=True, inplace = True)
-#     
+    # filter emg
     biceps_filtered = filteremg(new_dataset['time'],new_dataset['biceps'])
     triceps_filtered = filteremg(new_dataset['time'],new_dataset['triceps'])
     deltoid_filtered = filteremg(new_dataset['time'],new_dataset['deltoid'])
@@ -249,6 +265,7 @@ def filter_smooth(old_dataset):
     new_dataset['deltoid']=deltoid_filtered
     new_dataset['pecs']=pecs_filtered
     
+    # find the derivative for emg signals
     new_dataset['biceps_d']=np.append(np.diff(new_dataset['biceps'],1)/0.01,0)
     new_dataset['triceps_d']=np.append(np.diff(new_dataset['triceps'],1)/0.01,0)
     new_dataset['deltoid_d']=np.append(np.diff(new_dataset['deltoid'],1)/0.01,0)
@@ -266,6 +283,15 @@ def segment_data(dataset,amplitudes):
     import numpy as np
     import pandas as pd
     
+    """
+    Split the trajectories in dataset into segments with different window lengths (defined by different cut-off elbow angles)
+    
+    """
+    
+    # define window lengths
+    angle_cutoff = [2,5,10,15]
+    
+    # intialise variables
     count = 0
     #amplitude_var = np.zeros(len(dataset))
     amplitude_temp = []
@@ -287,11 +313,14 @@ def segment_data(dataset,amplitudes):
     segment_max_point = []
     segment_cut_off = []
     
-    angle_cutoff = [2,5,10,15]
+    # initialise a dictionary for each segment
     
     for j in range(0,len(angle_cutoff)):
         segments[j] = {}
 
+    # loop over the dataset and locate the trajectory and then segment that trajectory into segments 
+    
+    # there is nothing in the first 8 seconds and the dataset finishes at 12000.0 so ignore these
     
     for j in range(0,len(dataset['time'])):
       if (dataset['time'][j] % 8.0 == 0.0) & (dataset['time'][j] != 0.0) & (dataset['time'][j] != 1200.0): #& (dataset['imu'][j] < 5):
@@ -1266,6 +1295,11 @@ def normalise_MVC(emg_MVC, dataset):
     import matplotlib.pyplot as plt
     import numpy as np
     
+    """
+    Function to normalise EMG signals to MVC
+    
+    """
+    
     # plt.subplot(2,2,1)
     # plt.plot(emg_MVC['Time'], emg_MVC['Biceps'])
     # plt.title('biceps')
@@ -1282,21 +1316,24 @@ def normalise_MVC(emg_MVC, dataset):
     # plt.plot(emg_MVC['Time'], emg_MVC['Pecs'])
     # plt.title('Pecs')
     
-    plt.show()
+    # plt.show()
     
-    biceps_env = filteremg(emg_MVC['Time'], emg_MVC['Biceps'], low_pass=10, sfreq=1000, high_band=20, low_band=450, graphs=0)
-    triceps_env = filteremg(emg_MVC['Time'], emg_MVC['Triceps'], low_pass=10, sfreq=1000, high_band=20, low_band=450, graphs=0)
-    deltoid_env = filteremg(emg_MVC['Time'], emg_MVC['Deltoid'], low_pass=10, sfreq=1000, high_band=20, low_band=450, graphs=0)
-    pecs_env = filteremg(emg_MVC['Time'], emg_MVC['Pecs'], low_pass=10, sfreq=1000, high_band=20, low_band=450, graphs=0)
     
-    plt.show()
+    # filter the MVC signal
+    biceps_env = filteremg(emg_MVC['Time'], emg_MVC['Biceps'], graphs=0)
+    triceps_env = filteremg(emg_MVC['Time'], emg_MVC['Triceps'],  graphs=0)
+    deltoid_env = filteremg(emg_MVC['Time'], emg_MVC['Deltoid'],  graphs=0)
+    pecs_env = filteremg(emg_MVC['Time'], emg_MVC['Pecs'], graphs=0)
     
+    
+    # find the maximum values (search for the biceps maximum in the first half of the signal )
     a = int(0.5*len(biceps_env))
     biceps_MVC = np.max(biceps_env[0:a])
     triceps_MVC = np.max(triceps_env)
     deltoid_MVC  = np.max(deltoid_env)
     pecs_MVC = np.max(pecs_env)
-
+    
+    # normalise the signals based on the MVC
     dataset['biceps'] = dataset['biceps']/biceps_MVC
     dataset['biceps'] = dataset['biceps']/triceps_MVC
     dataset['biceps'] = dataset['biceps']/deltoid_MVC

@@ -26,9 +26,6 @@ import pickle
 
 #%% Read data
 
-dataset = pd.read_csv(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/data_processed')
-
-
 file = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/dict.datasets','rb')
 
 # dump information to that file
@@ -37,8 +34,7 @@ dataset_dict = pickle.load(file)
 # close the file
 file.close()
 
-
-#%% Test Modelling using a single dataset
+#%% Test Modelling using a single dataset (This is just for testing, not for producing final results)
 
 X = dataset_dict[0].drop(['Peak Amplitude','Peak Velocity','Mean Velocity','T_end', 'T_half'],axis=1)
     
@@ -75,7 +71,12 @@ kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
 # cv_res_df_pa =  baseline_regression_models(X_train, y_train_pa, mean_peak_amplitude, kfolds)
 
 
-#%%
+#%% 
+
+"""
+Create a list for each sensor containing their features 
+
+"""
 
 predictors=list(X_train)
 
@@ -98,42 +99,14 @@ for i in range(1,7):
     emg_col.append('ad{}'.format(i))
     emg_col.append('pm{}'.format(i))
 
-
-#%%
-
-X_train = X_train[imu_col]
-X_test = X_test[imu_col]
-
-#%%
-X_train = X_train[stretch_col]
-X_test = X_test[stretch_col]
-
-#%%
-
-X_train = X_train[emg_col]
-X_test = X_test[emg_col]
-
-
-#%%
-RFR = RandomForestRegressor(random_state=42)
-RFR.fit(X_train,y_train_mv)
-feat_imp = pd.Series(RFR.feature_importances_, predictors).sort_values(ascending=False)[:20]
-feat_imp.plot(kind='bar', title='Importance of Features')
-
-pred=RFR.predict(X_test)
-print('Test Error = ',np.mean(abs(pred-y_test_mv))*100/mean_mean_velocity)
-
-cross_val_error = np.mean(-cross_val_score(baseline, X_train, y_train_mv, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))*100/mean_mean_velocity
-
-print('Cross Validation Error =',cross_val_error)
-
-
 #%% Make a loop to test all datasets
 
+"""
+This cell returns 
 
-kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
-n_jobs=2
-i=0
+
+"""
+
 cv_means = []
 cv_std = []
 cv_results = {}
@@ -178,6 +151,9 @@ cv_res_df_pa_emg = {}
 feat_imp_pa_emg = {}
 
 i = 0
+
+kfolds = KFold(n_splits=10, shuffle=True, random_state=42)
+n_jobs=2
 
 for dataset_slt in dataset_dict.values():    
     
@@ -231,7 +207,7 @@ for dataset_slt in dataset_dict.values():
     
     i+=1
 
-#%%
+# Save all the results to a dictionary based on the sensor
 
 comb_results = {}
 comb_results['cv_res_mv'] = cv_res_df_mv_comb

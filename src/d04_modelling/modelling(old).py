@@ -12,9 +12,21 @@ Tuning Models
 
 """
 
+# RFR = RandomForestRegressor(random_state=42)
+# RFR.fit(X_train,y_train_mv)
+# feat_imp = pd.Series(RFR.feature_importances_, predictors).sort_values(ascending=False)[:20]
+# feat_imp.plot(kind='bar', title='Importance of Features')
+
+# pred=RFR.predict(X_test)
+# print('Test Error = ',np.mean(abs(pred-y_test_mv))*100/mean_mean_velocity)
+
+# cross_val_error = np.mean(-cross_val_score(baseline, X_train, y_train_mv, scoring = "neg_mean_absolute_error", cv = kfolds, n_jobs=n_jobs))*100/mean_mean_velocity
+
+# print('Cross Validation Error =',cross_val_error)
 
 #%% Train Test Split
 
+# dataset = pd.read_csv(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/data_processed')
 # X = dataset.drop(['peak_amplitude','peak_velocity','mean_velocity','time_end', 'time_half'],axis=1)
 
 # #X = X_reduced #####CHANGE

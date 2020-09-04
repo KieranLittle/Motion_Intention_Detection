@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Sep  3 15:47:59 2020
+
+@author: Kieran
+"""
+
+#%% READ TRAINING DATA AND TRAIN SVM
+
+# """
+# Single dataset for testing
+# """
+
+# sub_num = '3'
+# trial_num = '1'
+
+# dataset, amplitudes, emg_MVC = read_file(sub_num,trial_num) #compile into a single dataset (imu and emg)
+
+# dataset2 = resample(dataset)
+# dataset_filtered = filter_smooth(dataset2)
+
+# traj_segments,trajectory, df_trajectories = segment_data(dataset_filtered, amplitudes)
+
+# plot_traj(trajectory,df_trajectories['segment_cut_off'], df_trajectories['segment_max_point'])
+
+# plot_segments(traj_segments, df_trajectories['amplitude_change'], df_trajectories['peak_velocity'])
+
+# extracted_features = extract_features(traj_segments,df_trajectories)
+
+# # Training
+
+# # print('------------Support Vector Regression----------------\n')
+# # clf,clf2,min_max_scaler, min_max_scaler2 = Support_Vector_Regression(extracted_features)
+# X_test,y_test = Support_Vector_Regression(extracted_features)

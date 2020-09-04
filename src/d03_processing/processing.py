@@ -23,36 +23,6 @@ from scipy import stats
 import sys
 import os
 
-
-
-#%% READ TRAINING DATA AND TRAIN SVM
-
-# """
-# Single dataset for testing
-# """
-
-# sub_num = '3'
-# trial_num = '1'
-
-# dataset, amplitudes, emg_MVC = read_file(sub_num,trial_num) #compile into a single dataset (imu and emg)
-
-# dataset2 = resample(dataset)
-# dataset_filtered = filter_smooth(dataset2)
-
-# traj_segments,trajectory, df_trajectories = segment_data(dataset_filtered, amplitudes)
-
-# plot_traj(trajectory,df_trajectories['segment_cut_off'], df_trajectories['segment_max_point'])
-
-# plot_segments(traj_segments, df_trajectories['amplitude_change'], df_trajectories['peak_velocity'])
-
-# extracted_features = extract_features(traj_segments,df_trajectories)
-
-# # Training
-
-# # print('------------Support Vector Regression----------------\n')
-# # clf,clf2,min_max_scaler, min_max_scaler2 = Support_Vector_Regression(extracted_features)
-# X_test,y_test = Support_Vector_Regression(extracted_features)
-
 #%% READ AND EXTRACT FEATURES FROM TEST DATA
 
 """
@@ -73,7 +43,8 @@ start_angle = {}
 i = 0
 
 """
-The following loop 
+    1. read_file(): reads in the raw data files 
+    2. resample():
 
 """
 for filename in filename_list:
@@ -84,14 +55,14 @@ for filename in filename_list:
         trial_num_list = ['1','2']
     
     for trial_num in trial_num_list:
-    
-        dataset_test, amplitudes, emg_MVC = read_file(filename,trial_num) #compile into a single dataset (imu and emg)
+        
+        # compile different datafiles into a single dataset (imu, emg, stretch)
+        dataset_test, amplitudes, emg_MVC = read_file(filename,trial_num)
         
         ## Resample Dataset
-        
         dataset_test_RS = resample(dataset_test)
         
-        dataset_test_filtered = filter_smooth(dataset_test_RS)
+        dataset_test_filtered = filter_derivate(dataset_test_RS)
         
         ## Normalise to MVC EMG
         dataset_filt_norm = normalise_MVC(emg_MVC, dataset_test_filtered)
