@@ -278,7 +278,7 @@ def filter_derivate(dataset):
 
     return new_dataset
 
-def segment_data(dataset,amplitudes):
+def segment_data(dataset, angle_cutoff = [2,5,10,15]):
     
     import numpy as np
     import pandas as pd
@@ -289,7 +289,7 @@ def segment_data(dataset,amplitudes):
     """
     
     # define window lengths
-    angle_cutoff = [2,5,10,15]
+    #angle_cutoff = [2,5,10,15]
     
     # intialise variables
     count = 0
@@ -320,75 +320,99 @@ def segment_data(dataset,amplitudes):
 
     # loop over the dataset and locate the trajectory and then segment that trajectory into segments 
     
-    # there is nothing in the first 8 seconds and the dataset finishes at 12000.0 so ignore these
-    
     for j in range(0,len(dataset['time'])):
+        
+        # there is nothing in the first 8 seconds and the dataset finishes at 12000.0 so ignore these
       if (dataset['time'][j] % 8.0 == 0.0) & (dataset['time'][j] != 0.0) & (dataset['time'][j] != 1200.0): #& (dataset['imu'][j] < 5):
           
-          # Define initial trajectory
+          # Find the trajectory in the the window 0:7 seconds so make a first split between X and X+ 7 seconds
           trajectory_temp[count] = dataset.iloc[j:j+700,:] #400
+          
+          # define the angular position and angular velocity columns
           ap_col = trajectory_temp[count].columns.get_loc("angular position")
           av_col = trajectory_temp[count].columns.get_loc("angular velocity")
           
-          f = trajectory_temp[count].loc[((trajectory_temp[count].iloc[:,ap_col] > np.max(trajectory_temp[count].iloc[:,ap_col]-5)))] #& (trajectory_temp[count].iloc[:,-2]>0))] 
-          
-          end = f.index[0]- dataset.index[j]                               
-          #trajectory[count] = trajectory_temp[count].iloc[0:f.index[0]]
-                 
-          # Define the end point of the trajectory:
-          #amp_range = trajectory[count].loc[(trajectory[count]['angular position'] > max_amp-5)]
-          
+          """
+          Find the end of the trajectory
+          """
+          # find the index when the angular position is < max- (max_threshold)
+          max_threshold = 5.0
+          f = trajectory_temp[count].loc[((trajectory_temp[count].iloc[:,ap_col] > np.max(trajectory_temp[count].iloc[:,ap_col]-max_threshold)))] #& (trajectory_temp[count].iloc[:,-2]>0))] 
+          end = f.index[0]- dataset.index[j]  
+                                     
+          # Define the end trajectory period to search for the end of the motion
           end_traj = trajectory_temp[count][(end-50):]
           
-          amp_range = end_traj.loc[(end_traj['angular velocity'] < 1.0+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
-          end_amplitude_index = amp_range.index[0]
-              
-          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,av_col] > 1.0)]   #&(trajectory[count]['angular velocity']>0)]  
+          # search within the end of the trajectory to find when the velocity drops below 1+ min velocity
           
+          # set angular velocity threshold
+          end_velocity_threshold = 1.0
+          
+          # find the index when the velocity is below the threshold and set this as the end of the trajectory
+          amp_range = end_traj.loc[(end_traj['angular velocity'] <  end_velocity_threshold+min(abs(end_traj.iloc[:,-2])))] #0.99*max(end_traj.iloc[:,-3]))] 
+          end_amplitude_index = amp_range.index[0]
+          
+          """
+          Find the beginning of the trajectory
+          """
+          
+          # define the velocity threshold of the beginning of the segment
+          start_velocity_threshold = 1.0
+          
+          # find the index where the angular velocity exceeds the threshold
+          a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,av_col] > 1.0)]   #&(trajectory[count]['angular velocity']>0)]  
           start_amplitude_index_temp = a.index[0]
           
-          # Segment trajectory:        
+          # Define the trajectory based on the start and end index that we have previously found and see if it works:        
           trajectory_temp[count] = dataset.iloc[start_amplitude_index_temp:end_amplitude_index,:]#end_amplitude_index,:]
           
-          mean_velocity_temp = np.mean(trajectory_temp[count]['angular velocity'])  
-          start_amplitude_index = start_amplitude_index_temp#-int((mean_velocity_temp//2))
-          end_amplitude_index = end_amplitude_index#+int((mean_velocity_temp//2))
+          # This was to adapt the start and end index
+          # mean_velocity_temp = np.mean(trajectory_temp[count]['angular velocity'])  
+          start_amplitude_index = start_amplitude_index_temp  #-int((mean_velocity_temp//2))
+          end_amplitude_index = end_amplitude_index   #+int((mean_velocity_temp//2))
           
+          """
+          Define the final trajectory
+          """
+          # define the final trajectory
           trajectory[count] = dataset.iloc[start_amplitude_index_temp:end_amplitude_index,:]
           
-          # Define window:
           
-          # Measure variables that define the trajectory: 
+          """
+          Create segments based on different window lengths
+          """
           
-          # Find the start and end angular position and the change
           
-          
+          # Find the start and end angular position
           end_amplitude =  trajectory[count].iloc[-1,ap_col]#trajectory[count].iloc[amp_range_index,-3]
           start_amplitude = trajectory[count].iloc[0,ap_col]
-          amplitude_change_ = end_amplitude- start_amplitude
-          amplitude_change.append(amplitude_change_)
           
-          # define end of window
+         
+          # for each loop create a segment that is from the start to different angle cut-offs
           
           for angle in angle_cutoff:
           
               cut_off_index = trajectory[count].loc[(trajectory[count].iloc[:,ap_col] < (start_amplitude + angle))].index[-1]
               segments[angle_cutoff.index(angle)][count] = dataset.iloc[start_amplitude_index:cut_off_index,:]
           
-          # Find the time at half the cycle
-          d = trajectory[count].loc[((trajectory[count]['angular position'] - start_amplitude) < (amplitude_change_/2))]
+          """
+          Extract information about the trajectory that will be predicted in the learning phase
+          """
+        
+          # define the change in ampltiude from the start to the end
+          amplitude_change_ = end_amplitude- start_amplitude
+          amplitude_change.append(amplitude_change_)
           
-
+          # Find the time at halfway to the end of the trajectory
+          d = trajectory[count].loc[((trajectory[count]['angular position'] - start_amplitude) < (amplitude_change_/2))]
           half_time_ = d.iloc[-1,0]- trajectory[count].iloc[0,0]
           amplitude_half = d.iloc[-1,ap_col] #- start_amplitude
           
+          # Append half time and half amplitude to list
           time_half.append(half_time_)
-            
-          # Find the amplitude at halfway
-          #amplitude_half = d.iloc[-1,ap_col] - start_amplitude
           half_amplitude_change.append(amplitude_half)
           
-          # Find peak and mean velocity
+          # Find peak and mean velocity and append to lists
           peak_velocity = np.max(trajectory[count]['angular velocity'])   #np.max(np.diff(dataset[j:j+400]['imu'],1))/0.01
           #mean_velocity = np.mean(trajectory[count]['angular velocity'])  
           mean_velocity = amplitude_half/half_time_
@@ -396,12 +420,14 @@ def segment_data(dataset,amplitudes):
           peak_segment_velocity.append(peak_velocity)
           mean_segment_velocity.append(mean_velocity)
           
+          # append the start and end index of trajectory
           segment_cut_off.append(start_amplitude_index)
           segment_max_point.append(end_amplitude_index)
           
           # Find the start position
           start_angle.append(start_amplitude)
           
+          # time of start and end trajectory
           time_start_ = trajectory[count].iloc[0,0]
           time_end_ = trajectory[count].iloc[-1,0]-time_start_
           
@@ -409,12 +435,13 @@ def segment_data(dataset,amplitudes):
           time_end.append(time_end_)
           
           count=count+1
-          
+    
+    # Round the values to avoid precision 
     peak_segment_velocity = [ round(elem, 2) for elem in peak_segment_velocity ]
     time_end = [ round(elem, 2) for elem in time_end ]
     time_half = [ round(elem, 2) for elem in time_half ]
 
-#          
+    # create a dataframe from the values extracted from the trajectories 
     dict = {'amplitude_change': amplitude_change, 'peak_velocity': peak_segment_velocity, 'mean_velocity': mean_segment_velocity, \
             'time_half':time_half, 'time_end':time_end, 'segment_cut_off':segment_cut_off, 'segment_max_point':segment_max_point, 'start_angle':start_angle}
         
@@ -539,48 +566,48 @@ def extract_features(segments, df,filename,trial_num):
   #             4. sum of tricep
   #             5. etc
 
-  stretch_sum = []
-  imu_sum = []
-  biceps_sum = []
-  triceps_sum = []
-  deltoid_sum = []
-  pecs_sum = []
-  #amplitude =[]
+  # stretch_sum = []
+  # imu_sum = []
+  # biceps_sum = []
+  # triceps_sum = []
+  # deltoid_sum = []
+  # pecs_sum = []
+  # #amplitude =[]
 
-  biceps_max = []
-  triceps_max = []
-  deltoid_max = []
+  # biceps_max = []
+  # triceps_max = []
+  # deltoid_max = []
   
-  stretch_max = []
-  imu_max = []
-  velocity_max = []
+  # stretch_max = []
+  # imu_max = []
+  # velocity_max = []
   
-  curr_velocity = []
-  curr_acc = []
-  curr_biceps_change = []
-  curr_biceps_change2 = []
-  curr_triceps_change = []
-  curr_triceps_change2 = []
-  curr_stretch_change = []
-  curr_stretch_change2 = []
+  # curr_velocity = []
+  # curr_acc = []
+  # curr_biceps_change = []
+  # curr_biceps_change2 = []
+  # curr_triceps_change = []
+  # curr_triceps_change2 = []
+  # curr_stretch_change = []
+  # curr_stretch_change2 = []
 
-  biceps_diff = []
-  triceps_diff = []
-  deltoid_diff = []
-  stretch_diff = []
-  imu_diff = []
+  # biceps_diff = []
+  # triceps_diff = []
+  # deltoid_diff = []
+  # stretch_diff = []
+  # imu_diff = []
   
-  stretch_gradient = []
-  biceps_gradient = []
-  triceps_gradient = []
-  deltoid_gradient = []
-  pecs_gradient = []
+  # stretch_gradient = []
+  # biceps_gradient = []
+  # triceps_gradient = []
+  # deltoid_gradient = []
+  # pecs_gradient = []
   
-  biceps_min = []
-  biceps_min_time = []
+  # biceps_min = []
+  # biceps_min_time = []
   
-  triceps_min = []
-  deltoid_min = []
+  # triceps_min = []
+  # deltoid_min = []
   
   segment_duration = []
   features_df = {} #pd.DataFrame()
@@ -588,17 +615,17 @@ def extract_features(segments, df,filename,trial_num):
   
   # New features
   
-  stretch_mean = []
-  bb_mean = []
-  tb_mean =[]
-  ad_mean = []
-  pm_mean =[]
+  # stretch_mean = []
+  # bb_mean = []
+  # tb_mean =[]
+  # ad_mean = []
+  # pm_mean =[]
   
-  stretch_var = []
-  bb_var = []
-  tb_var = []
-  ad_var = []
-  pm_var = []
+  # stretch_var = []
+  # bb_var = []
+  # tb_var = []
+  # ad_var = []
+  # pm_var = []
   
   col = []
 
@@ -633,85 +660,85 @@ def extract_features(segments, df,filename,trial_num):
           
           segment_ind = segments[window][segment_number]
           
-        ## Time
-          segment_duration.append(segment_ind.iloc[-1,0] - segment_ind.iloc[0,0])
+      #   ## Time
+      #     segment_duration.append(segment_ind.iloc[-1,0] - segment_ind.iloc[0,0])
           
-        ## Position  
+      #   ## Position  
           
-          imu_sum.append(segment_ind['angular position'].sum())
-          imu_max.append(np.max(segment_ind['angular position']))
-          imu_diff.append(segment_ind.iloc[-1]['angular position'] - segment_ind.iloc[0]['angular position'])
+      #     imu_sum.append(segment_ind['angular position'].sum())
+      #     imu_max.append(np.max(segment_ind['angular position']))
+      #     imu_diff.append(segment_ind.iloc[-1]['angular position'] - segment_ind.iloc[0]['angular position'])
           
-        ## Velocity
-          velocity_max.append(np.max(segment_ind['angular velocity']))
-          curr_velocity.append(np.mean(segment_ind.iloc[-30:,-2]))
+      #   ## Velocity
+      #     velocity_max.append(np.max(segment_ind['angular velocity']))
+      #     curr_velocity.append(np.mean(segment_ind.iloc[-30:,-2]))
           
-        ## Acceleration
-          curr_acc.append(np.mean(segment_ind.iloc[-30:,-1]))#[(len(segments[segment_number])-30):]))
+      #   ## Acceleration
+      #     curr_acc.append(np.mean(segment_ind.iloc[-30:,-1]))#[(len(segments[segment_number])-30):]))
           
-        ## Stretch
-          stretch_sum.append(segment_ind['stretch'].sum())
-          stretch_max.append(np.max(segment_ind.iloc[:-10,1]))
-          curr_stretch_change.append(np.mean(np.diff(segment_ind['stretch'],1)[(len(segment_ind)-30):]))
-          curr_stretch_change2.append(np.mean(np.diff(segment_ind['stretch'],2)[(len(segment_ind)-30):]))
-          stretch_diff.append(segment_ind.iloc[-1]['stretch'] - segment_ind.iloc[0]['stretch'])
-          #stretch_gradient.append(np.max(np.diff(segments[segment_number].iloc[:-10,1],1)/0.01))
+      #   ## Stretch
+      #     stretch_sum.append(segment_ind['stretch'].sum())
+      #     stretch_max.append(np.max(segment_ind.iloc[:-10,1]))
+      #     curr_stretch_change.append(np.mean(np.diff(segment_ind['stretch'],1)[(len(segment_ind)-30):]))
+      #     curr_stretch_change2.append(np.mean(np.diff(segment_ind['stretch'],2)[(len(segment_ind)-30):]))
+      #     stretch_diff.append(segment_ind.iloc[-1]['stretch'] - segment_ind.iloc[0]['stretch'])
+      #     #stretch_gradient.append(np.max(np.diff(segments[segment_number].iloc[:-10,1],1)/0.01))
           
-        ## Biceps
+      #   ## Biceps
           
-          biceps_sum.append(segment_ind['biceps'].sum())
-          biceps_max.append(np.max(np.abs(segment_ind['biceps'])))
-          curr_biceps_change.append(np.mean(np.diff(segment_ind['biceps'],1)[(len(segment_ind)-30):]))
-          curr_biceps_change2.append(np.mean(np.diff(segment_ind['biceps'],2)[(len(segment_ind)-30):]))
-          #biceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,3],1)/0.01))
-          biceps_diff.append(segment_ind.iloc[-1]['biceps'] - segment_ind.iloc[0]['biceps'])
-          biceps_min.append(np.min(segment_ind['biceps']))
-          biceps_min_time.append(segment_ind.loc[segment_ind.idxmin()['biceps']]['time']-segment_ind.iloc[0,0])
+      #     biceps_sum.append(segment_ind['biceps'].sum())
+      #     biceps_max.append(np.max(np.abs(segment_ind['biceps'])))
+      #     curr_biceps_change.append(np.mean(np.diff(segment_ind['biceps'],1)[(len(segment_ind)-30):]))
+      #     curr_biceps_change2.append(np.mean(np.diff(segment_ind['biceps'],2)[(len(segment_ind)-30):]))
+      #     #biceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,3],1)/0.01))
+      #     biceps_diff.append(segment_ind.iloc[-1]['biceps'] - segment_ind.iloc[0]['biceps'])
+      #     biceps_min.append(np.min(segment_ind['biceps']))
+      #     biceps_min_time.append(segment_ind.loc[segment_ind.idxmin()['biceps']]['time']-segment_ind.iloc[0,0])
            
-        ## Triceps
-          triceps_sum.append(segment_ind['triceps'].sum())
-          triceps_max.append(np.max(np.abs(segment_ind['triceps'])))
-          curr_triceps_change.append(np.mean(np.diff(segment_ind['triceps'],1)[(len(segment_ind)-30):]))
-          curr_triceps_change2.append(np.mean(np.diff(segment_ind['triceps'],2)[(len(segment_ind)-30):]))
-          #triceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,4],1)/0.01))
-          triceps_diff.append(segment_ind.iloc[-1]['triceps'] - segment_ind.iloc[0]['triceps'])
-          triceps_min.append(np.min(segment_ind['triceps']))
+      #   ## Triceps
+      #     triceps_sum.append(segment_ind['triceps'].sum())
+      #     triceps_max.append(np.max(np.abs(segment_ind['triceps'])))
+      #     curr_triceps_change.append(np.mean(np.diff(segment_ind['triceps'],1)[(len(segment_ind)-30):]))
+      #     curr_triceps_change2.append(np.mean(np.diff(segment_ind['triceps'],2)[(len(segment_ind)-30):]))
+      #     #triceps_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,4],1)/0.01))
+      #     triceps_diff.append(segment_ind.iloc[-1]['triceps'] - segment_ind.iloc[0]['triceps'])
+      #     triceps_min.append(np.min(segment_ind['triceps']))
         
-        ## Deltoid
-          deltoid_sum.append(segment_ind['deltoid'].sum())
-          deltoid_max.append(np.max(np.abs(segment_ind['deltoid'])))
-          #deltoid_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,5],1)/0.01))
-          deltoid_diff.append(segment_ind.iloc[-1]['deltoid'] - segment_ind.iloc[0]['deltoid'])
-          deltoid_min.append(np.min(segment_ind['deltoid']))
+      #   ## Deltoid
+      #     deltoid_sum.append(segment_ind['deltoid'].sum())
+      #     deltoid_max.append(np.max(np.abs(segment_ind['deltoid'])))
+      #     #deltoid_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,5],1)/0.01))
+      #     deltoid_diff.append(segment_ind.iloc[-1]['deltoid'] - segment_ind.iloc[0]['deltoid'])
+      #     deltoid_min.append(np.min(segment_ind['deltoid']))
           
-        ## Pecs
-          pecs_sum.append(segment_ind['pecs'].sum())
-          #pecs_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,6],1)/0.01))
+      #   ## Pecs
+      #     pecs_sum.append(segment_ind['pecs'].sum())
+      #     #pecs_gradient.append(max(np.diff(segments[segment_number].iloc[:-10,6],1)/0.01))
          
-          """ 
-          Define segment length, split into 6 evenly spaced points
-          Features of each point for each sensor (6):
-            1. time
-            2. position
-            3. velocity 
-            4. acceleration
-            = 24 features
+      #     """ 
+      #     Define segment length, split into 6 evenly spaced points
+      #     Features of each point for each sensor (6):
+      #       1. time
+      #       2. position
+      #       3. velocity 
+      #       4. acceleration
+      #       = 24 features
             
-            + mean
-            + var
-          """
+      #       + mean
+      #       + var
+      #     """
           
-          stretch_mean.append(np.mean(segment_ind['stretch']))
-          bb_mean.append(np.mean(segment_ind['biceps']))
-          tb_mean.append(np.mean(segment_ind['triceps']))
-          ad_mean.append(np.mean(segment_ind['deltoid']))
-          pm_mean.append(np.mean(segment_ind['pecs']))
+      #     stretch_mean.append(np.mean(segment_ind['stretch']))
+      #     bb_mean.append(np.mean(segment_ind['biceps']))
+      #     tb_mean.append(np.mean(segment_ind['triceps']))
+      #     ad_mean.append(np.mean(segment_ind['deltoid']))
+      #     pm_mean.append(np.mean(segment_ind['pecs']))
           
-          stretch_var.append(np.var(segment_ind['stretch']))
-          bb_var.append(np.var(segment_ind['biceps']))
-          tb_var.append(np.var(segment_ind['triceps']))
-          ad_var.append(np.var(segment_ind['deltoid']))
-          pm_var.append(np.var(segment_ind['pecs']))
+      #     stretch_var.append(np.var(segment_ind['stretch']))
+      #     bb_var.append(np.var(segment_ind['biceps']))
+      #     tb_var.append(np.var(segment_ind['triceps']))
+      #     ad_var.append(np.var(segment_ind['deltoid']))
+      #     pm_var.append(np.var(segment_ind['pecs']))
         
           segment_ind['time'] = np.round([i - segment_ind['time'].iloc[0] for i in segment_ind['time']],2)
         
@@ -732,12 +759,12 @@ def extract_features(segments, df,filename,trial_num):
           features_df[window] = features_df[window].append(features_df_single)
               
         
-      dict = {'curr_triceps_change2': curr_triceps_change2, 'curr_biceps_change2': curr_biceps_change2,\
-              'triceps_min':triceps_min, 'triceps_max':triceps_max,'pecs_sum':pecs_sum,\
-              'biceps_sum':biceps_sum,'biceps_max':biceps_max, 'biceps_min':biceps_min, \
-              'curr_velocity':curr_velocity, 'curr_acc':curr_acc, \
-              'segment_duration': segment_duration,'deltoid_sum':deltoid_sum,\
-              'stretch_max':stretch_max}
+      # dict = {'curr_triceps_change2': curr_triceps_change2, 'curr_biceps_change2': curr_biceps_change2,\
+      #         'triceps_min':triceps_min, 'triceps_max':triceps_max,'pecs_sum':pecs_sum,\
+      #         'biceps_sum':biceps_sum,'biceps_max':biceps_max, 'biceps_min':biceps_min, \
+      #         'curr_velocity':curr_velocity, 'curr_acc':curr_acc, \
+      #         'segment_duration': segment_duration,'deltoid_sum':deltoid_sum,\
+      #         'stretch_max':stretch_max}
           
    
       # 'stretch_gradient':stretch_gradient,
@@ -746,10 +773,8 @@ def extract_features(segments, df,filename,trial_num):
       #'window_max_velocity':velocity_max, 'curr_velocity':curr_velocity, 'curr_acc':curr_acc, 'biceps_diff':biceps_diff, 'imu_diff':imu_diff, 'biceps_min':biceps_min, 'biceps_min_time':biceps_min_time } #{'biceps_sum':biceps_sum, 'biceps_max':biceps_max, 'biceps_gradient':biceps_gradient, 'triceps_gradient':triceps_gradient,'stretch_gradient':stretch_gradient, 'imu_diff':imu_diff, 'curr_velocity':curr_velocity, 'curr_acc':curr_acc }
       #'deltoid_gradient':deltoid_gradient, 'pecs_gradient':pecs_gradient, 'imu_max':imu_max, 'stretch_gradient':stretch_gradient,'stretch_max':stretch_max} # 'stretch_gradient':stretch_gradient, 'window_max_velocity':velocity_max'stretch_gradient':stretch_gradient 'imu_diff':imu_diff 'window_max_velocity':velocity_max}  #'stretch_diff':stretch_gradient #stretch_diff':stretch_diff} #'velocity_max':velocity_max, 'biceps_max':biceps_max, 'triceps_diff':triceps_diff, 'deltoid_diff':deltoid_diff 'velocity_max':velocity_max 'stretch_diff':stretch_diff,'imu_diff':imu_diff,  'triceps_sum':triceps_sum,'deltoid_sum':deltoid_sum,'pecs_sum':pecs_sum,'amplitude':amplitude}
       
-      df_selected_features[window] = pd.DataFrame(dict) 
+      # df_selected_features[window] = pd.DataFrame(dict) 
       
-   
-  
   # features_df['stretch_mean'] = stretch_mean
   # features_df['bb_mean'] = bb_mean
   # features_df['tb_mean'] = tb_mean
@@ -785,7 +810,123 @@ def extract_features(segments, df,filename,trial_num):
   # #sns.pairplot(df2)
   # #plt.show()
       
-  return features_df, df_selected_features,col
+  return features_df #df_selected_features,col
+
+
+def segment_extract_features(segments, df, filename, trial_num, num_of_extracted_points = 10):
+    
+  import numpy as np
+  import pandas as pd
+  import seaborn as sns
+  import matplotlib.pyplot as plt
+  from scipy import stats
+  
+  
+  # initialise variables
+  segment_duration = []
+  features_df = {} 
+  df_selected_features = {}
+  
+  
+  # define new column names for the new dataframe containing the extracted points 
+  col = []
+
+  for i in range(1,num_of_extracted_points+1):
+     col.append('time{}'.format(i))
+     col.append('stretch{}'.format(i))
+     col.append('bb{}'.format(i))
+     col.append('tb{}'.format(i))
+     col.append('ad{}'.format(i))
+     col.append('pm{}'.format(i))
+     col.append('pos{}'.format(i))
+     col.append('vel{}'.format(i))
+     col.append('acc{}'.format(i))
+      
+     col.append('stretch_d{}'.format(i))
+     col.append('stretch_dd{}'.format(i))
+        
+     col.append('bb_d_{}'.format(i))
+     col.append('tb_d_{}'.format(i))
+     col.append('ad_d_{}'.format(i))
+     col.append('pm_d_{}'.format(i))
+     col.append('bb_dd_{}'.format(i))
+     col.append('tb_dd_{}'.format(i))
+     col.append('ad_dd_{}'.format(i))
+     col.append('pm_dd_{}'.format(i))
+    
+  # segments has the structure segments[window_length][segment_number]
+  # for each segment[window_length] create a dataframe a new dataframe 
+  
+  for window in range(0,len(segments)):
+      
+      features_df[window] = pd.DataFrame()
+      
+      # for each of the segments in segments[window] 
+  
+      for segment_number in range(0,len(segments[window])):
+          
+          # select a segment
+          segment_ind = segments[window][segment_number]
+          
+     
+          """ 
+           Define segment length, split into X evenly spaced points
+           Features of each point for each sensor (6):
+             X = num_of_extracted_points 
+               
+             1. time
+             2. position
+             3. velocity 
+             4. acceleration
+             = 24 features
+            
+             + mean
+             + var
+          """
+          
+      #     stretch_mean.append(np.mean(segment_ind['stretch']))
+      #     bb_mean.append(np.mean(segment_ind['biceps']))
+      #     tb_mean.append(np.mean(segment_ind['triceps']))
+      #     ad_mean.append(np.mean(segment_ind['deltoid']))
+      #     pm_mean.append(np.mean(segment_ind['pecs']))
+          
+      #     stretch_var.append(np.var(segment_ind['stretch']))
+      #     bb_var.append(np.var(segment_ind['biceps']))
+      #     tb_var.append(np.var(segment_ind['triceps']))
+      #     ad_var.append(np.var(segment_ind['deltoid']))
+      #     pm_var.append(np.var(segment_ind['pecs']))
+        
+          # make the start time of each segment = 0, and round all the time within the segment
+          segment_ind['time'] = np.round([i - segment_ind['time'].iloc[0] for i in segment_ind['time']],2)
+        
+          # find the legnth of the segment
+          segment_length = len(segment_ind) # in samples
+          
+          # create an array of X numbers between 0 and the segment length
+          # X = num_of_extracted_points
+          indicies = np.round(np.linspace(0,segment_length-1, num_of_extracted_points)).astype(int)
+          
+          # extract the X number of points from the segment and then flatten the points to a 1D array
+          features_df_ravel = pd.DataFrame(np.array(segment_ind.iloc[indicies,:]).ravel())
+          
+          # transpose and label the column names
+          features_df_single = features_df_ravel.T
+          features_df_single.columns = col
+          
+          # add extra details to the dataframe
+          features_df_single['Peak Amplitude'] = df['amplitude_change'][segment_number] #np.array(df['amplitude_change'])
+          features_df_single['Peak Velocity'] = df['peak_velocity'][segment_number]
+          features_df_single['Mean Velocity'] = df['mean_velocity'][segment_number]
+          features_df_single['T_end'] = df['time_end'][segment_number]
+          features_df_single['T_half'] = df['time_half'][segment_number]
+          features_df_single['Subject_Num'] = int(filename)
+          features_df_single['Trial_Num'] = int(trial_num)
+          
+          # append the created row to a dataframe 
+          features_df[window] = features_df[window].append(features_df_single)
+                      
+  return features_df
+
 
 def MLR(df):
 
@@ -1533,10 +1674,36 @@ def baseline_regression_models(X_train, y_train, mean_val, kfolds=0, n_jobs=1, c
     
     return cv_res.sort_values('CrossValMeans').reset_index(drop=True), feat_imp
     
+#%%
+
+
+def combine_extracted_dataframes(extracted_features_test, trajectory_test, angle_cutoff):
+
+    """
+    Combines the extracted features dataframe from each trial into 1 dictionary containing 1 big dataframe for each window length
+    Combines all the trajecories from different trials into one dictionary
+
+    """    
+
+    full_combined_features = {}
     
-
-
-
+    for window in range(0,len(angle_cutoff)-1):
+        full_combined_features[window] = extracted_features_test[0][window].copy()
+    
+        for j in range(1,6):
+            
+            full_combined_features[window] = full_combined_features[window].append(extracted_features_test[j][window], ignore_index=True, sort=False)
+            
+    full_combined_trajectories = trajectory_test[0].copy()
+    x=0
+    
+    for k in range(1,6):
+        for t in range(0,len(trajectory_test[0])):
+            
+            full_combined_trajectories[x] = trajectory_test[k][t]
+            x=x+1
+            
+    return full_combined_features, full_combined_trajectories
 
 
 

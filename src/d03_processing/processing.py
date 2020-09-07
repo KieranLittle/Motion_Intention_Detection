@@ -39,13 +39,18 @@ df_selected_features= {}
 trajectory_test = {}
 start_angle = {}
 
+# Define the segment cut-off point, this is based on the angular position
+angle_cutoff = [2,5,10,15,20]
+
 # initialise index
 i = 0
 
 """
     1. read_file(): reads in the raw data files 
-    2. resample():
-
+    2. resample(): maybe this is not required anymore?
+    3. filter_derivate(): filters all the signals and find the derivative signals
+    4. normalise_MVC()
+: 
 """
 for filename in filename_list:
     
@@ -67,42 +72,30 @@ for filename in filename_list:
         ## Normalise to MVC EMG
         dataset_filt_norm = normalise_MVC(emg_MVC, dataset_test_filtered)
         
-        ## Segment data
+        ## Split the dataset into complete trajectories and then split into segments of different time windows
         
-        traj_segments_test,trajectory_test[i], df_trajectories_test = segment_data(dataset_filt_norm, amplitudes)
+        traj_segments_test,trajectory_test[i], df_trajectories_test = segment_data(dataset_filt_norm,angle_cutoff)
+        
+        # traj_segments_test,trajectory_test[i], df_trajectories_test = segment_data(dataset_filt_norm, amplitudes)
         
         #plot_segments(traj_segments_test, peak_amplitude, peak_velocities)
         #plot_traj(trajectory,segment_line, segment_max_point)
         
-        extracted_features_test[i], df_selected_features[i],col = extract_features(traj_segments_test,df_trajectories_test,filename,trial_num)
+        #extracted_features_test[i], df_selected_features[i],col = extract_features(traj_segments_test,df_trajectories_test,filename,trial_num)
+        
+        extracted_features_test[i] = segment_extract_features(traj_segments_test,df_trajectories_test,filename,trial_num,num_of_extracted_points = 10)
+        
         i = i+1
 
 #%%
-"""
-Combine all the features and trajectories into 1 dictionary each
 
 """
+Combine all dataframes from trials into 1 dictionary containing 1 dataframe per window
 
-full_combined_features = {}
-
-for window in range(0,4):
-    full_combined_features[window] = extracted_features_test[0][window].copy()
-
-    for j in range(1,6):
-        
-        full_combined_features[window] = full_combined_features[window].append(extracted_features_test[j][window], ignore_index=True, sort=False)
-
-
-        
-full_combined_trajectories = trajectory_test[0].copy()
-x=0
-
-for k in range(1,6):
-    for t in range(0,len(trajectory_test[0])):
-        
-        full_combined_trajectories[x] = trajectory_test[k][t]
-        x=x+1
+"""
    
+full_combined_features, full_combined_trajectories = combine_extracted_dataframes(extracted_features_test, trajectory_test, angle_cutoff)
+
         
 #%%   
 """
@@ -152,8 +145,6 @@ for h in range(0, len(full_combined_trajectories.keys())):
 for i in range(0,4):
     filtered_mj_feat[i] = filtered_mj_feat[i].reset_index(drop=True)
             
-        
-            #filtered_mj_feat = filtered_mj_feat.reset_index(drop = True)
 
 # RESET INDEX:
 filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
