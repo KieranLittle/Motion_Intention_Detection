@@ -26,7 +26,11 @@ import pickle
 
 #%% Read data
 
-file = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/dict.datasets','rb')
+num_of_extracted_points = 6
+
+filename = 'dict.datasets_'+str(num_of_extracted_points)+'points'+'_change_filter3'
+
+file = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/'+filename,'rb')
 
 # dump information to that file
 dataset_dict = pickle.load(file)
@@ -186,27 +190,28 @@ for dataset_slt in dataset_dict.values():
     
     ## ALL SIGNALS
     cv_res_df_mv_comb[i],feat_imp_mv_comb[i], sensor_imp_mv_comb[i] =  baseline_regression_models(X_train, y_train_mv, mean_mean_velocity, kfolds, combined=1)
-    cv_res_df_ht_comb[i],feat_imp_ht_comb[i], sensor_imp_ht_comb[i] =  baseline_regression_models(X_train, y_train_dur, mean_time_half, kfolds, combined=1)
-    cv_res_df_pa_comb[i],feat_imp_pa_comb[i], sensor_imp_pa_comb[i] =  baseline_regression_models(X_train, y_train_pa, mean_peak_amplitude, kfolds, combined=1)
+    # cv_res_df_ht_comb[i],feat_imp_ht_comb[i], sensor_imp_ht_comb[i] =  baseline_regression_models(X_train, y_train_dur, mean_time_half, kfolds, combined=1)
+    # cv_res_df_pa_comb[i],feat_imp_pa_comb[i], sensor_imp_pa_comb[i] =  baseline_regression_models(X_train, y_train_pa, mean_peak_amplitude, kfolds, combined=1)
     
-    # ## IMU
-    cv_res_df_mv_imu[i],feat_imp_mv_imu[i]  =  baseline_regression_models(X_train_imu, y_train_mv, mean_mean_velocity, kfolds)
-    cv_res_df_ht_imu[i],feat_imp_ht_imu[i] =  baseline_regression_models(X_train_imu, y_train_dur, mean_time_half, kfolds)
-    cv_res_df_pa_imu[i],feat_imp_pa_imu[i] =  baseline_regression_models(X_train_imu, y_train_pa, mean_peak_amplitude, kfolds)
+    # # ## IMU
+    # cv_res_df_mv_imu[i],feat_imp_mv_imu[i]  =  baseline_regression_models(X_train_imu, y_train_mv, mean_mean_velocity, kfolds)
+    # cv_res_df_ht_imu[i],feat_imp_ht_imu[i] =  baseline_regression_models(X_train_imu, y_train_dur, mean_time_half, kfolds)
+    # cv_res_df_pa_imu[i],feat_imp_pa_imu[i] =  baseline_regression_models(X_train_imu, y_train_pa, mean_peak_amplitude, kfolds)
     
-    # ## Stretch 
-    cv_res_df_mv_stretch[i], feat_imp_mv_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_mv, mean_mean_velocity, kfolds)
-    cv_res_df_ht_stretch[i], feat_imp_ht_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_dur, mean_time_half, kfolds)
-    cv_res_df_pa_stretch[i], feat_imp_pa_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_pa, mean_peak_amplitude, kfolds)
+    # # ## Stretch 
+    # cv_res_df_mv_stretch[i], feat_imp_mv_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_mv, mean_mean_velocity, kfolds)
+    # cv_res_df_ht_stretch[i], feat_imp_ht_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_dur, mean_time_half, kfolds)
+    # cv_res_df_pa_stretch[i], feat_imp_pa_stretch[i] =  baseline_regression_models(X_train_stretch, y_train_pa, mean_peak_amplitude, kfolds)
     
-    # # EMG
-    cv_res_df_mv_emg[i], feat_imp_mv_emg[i] =  baseline_regression_models(X_train_emg, y_train_mv, mean_mean_velocity, kfolds)
-    cv_res_df_ht_emg[i], feat_imp_ht_emg[i] =  baseline_regression_models(X_train_emg, y_train_dur, mean_time_half, kfolds)
-    cv_res_df_pa_emg[i], feat_imp_pa_emg[i] =  baseline_regression_models(X_train_emg, y_train_pa, mean_peak_amplitude, kfolds)
+    # # # EMG
+    # cv_res_df_mv_emg[i], feat_imp_mv_emg[i] =  baseline_regression_models(X_train_emg, y_train_mv, mean_mean_velocity, kfolds)
+    # cv_res_df_ht_emg[i], feat_imp_ht_emg[i] =  baseline_regression_models(X_train_emg, y_train_dur, mean_time_half, kfolds)
+    # cv_res_df_pa_emg[i], feat_imp_pa_emg[i] =  baseline_regression_models(X_train_emg, y_train_pa, mean_peak_amplitude, kfolds)
     
     
     i+=1
 
+#%%
 # Save all the results to a dictionary based on the sensor
 
 comb_results = {}
@@ -281,22 +286,27 @@ pickle_out.close()
         
 #%%
 
-angles = [2,5,10,15]
+angles = [1,2,5,10]
 
 best_scores_mv = []
 best_scores_ht = []
 best_scores_pa = []
 
 for i in range(0,len(angles)):
-
-    best_scores_mv.append(cv_res_df_mv[i].loc[0].CrossValMeans)
-    best_scores_ht.append(cv_res_df_ht[i].loc[0].CrossValMeans)
-    best_scores_pa.append(cv_res_df_pa[i].loc[0].CrossValMeans)
+    
+    best_scores_mv.append
+    best_scores_mv.append(cv_res_df_mv_comb[i].loc[0].CrossValMeans)
+    
+    # best_scores_ht.append(cv_res_df_ht_comb[i].loc[0].CrossValMeans)
+    # best_scores_pa.append(cv_res_df_pa_comb[i].loc[0].CrossValMeans)
     
 plt.figure(1)
 plt.plot(angles,best_scores_mv)
-plt.plot(angles,best_scores_ht)
-plt.plot(angles,best_scores_pa)
+plt.ylabel('Mean 10 fold cross validation Percentage Error of Mean Velocity')
+plt.xlabel('Cut-off angle')
+
+# plt.plot(angles,best_scores_ht)
+# plt.plot(angles,best_scores_pa)
 
 
 

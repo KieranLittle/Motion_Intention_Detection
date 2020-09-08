@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.pipeline import make_pipeline
 
+#%%
 def read_file(sub_num, trial_num):
     
     """
@@ -133,7 +134,7 @@ def resample(dataset):
     return dataset
     
 
-def filteremg(time, emg, low_pass=30, sfreq=100, high_band=5, low_band=49, graphs=1):
+def filteremg(time, emg, low_pass=49, sfreq=100, high_band=2, low_band=40, graphs=1):
     import scipy as sp
     import matplotlib.pyplot as plt
     
@@ -148,22 +149,29 @@ def filteremg(time, emg, low_pass=30, sfreq=100, high_band=5, low_band=49, graph
     sfreq: sampling frequency
     """
     
-    # normalise cut-off to sfreq
+    # # normalise cut-off to sfreq
     high_band = high_band/(sfreq/2)
     low_band = low_band/(sfreq/2)
     
-    # create bandpass filter
-    b1, a1 = sp.signal.butter(4, [high_band,low_band], btype='bandpass')
+    # # create bandpass filter
+    b1, a1 = sp.signal.butter(2, [high_band,low_band], btype='bandpass')
     
-    # apply forward backward filtering filtfilt
+    # # apply forward backward filtering filtfilt
     emg_filtered = sp.signal.filtfilt(b1, a1, emg)    
     
-    # rectify
+    # # rectify
     emg_rectified = abs(emg_filtered)
+    #emg_rectified = abs(emg)
     
-    # apply low pass filter to rectified signal
+    # # apply low pass filter to rectified signal
     low_pass = low_pass/sfreq
-    b2, a2 = sp.signal.butter(4, low_pass, btype='lowpass')
+    
+    #high_pass = 20/sfreq
+    
+    b2, a2 = sp.signal.butter(2, low_pass, btype='lowpass')
+    #b2, a2 = sp.signal.butter(4, high_pass, btype='highpass')
+    
+    
     emg_envelope = sp.signal.filtfilt(b2, a2, emg_rectified)
     
     if graphs == 1:
@@ -194,19 +202,19 @@ def lowpass_filter(time, signal, order=1, low_pass=10, sfreq=100):
     b, a = sp.signal.butter(order, low_pass, btype='lowpass')
     filtered_signal = sp.signal.filtfilt(b, a, signal) #imu_rectified)
     
-    # plt.figure(1, figsize=(15,8))
-    # plt.subplot(2,5,1)
-    # plt.plot(time[0:10000],signal[0:10000])
-    # plt.subplot(2,5,2)
-    # plt.plot(time[0:10000],filtered_signal[0:10000])
-    # plt.subplot(2,5,3)
-    # plt.plot(time[0:1000],signal[0:1000])
-    # plt.subplot(2,5,4)
-    # plt.plot(time[0:1000],filtered_signal[0:1000])
-    # plt.subplot(2,5,5)
-    # plt.plot(time[0:1000],signal[0:1000])
-    # plt.plot(time[0:1000],filtered_signal[0:1000],'r')
-    # plt.show()
+    plt.figure(1, figsize=(15,8))
+    plt.subplot(2,5,1)
+    plt.plot(time[0:10000],signal[0:10000])
+    plt.subplot(2,5,2)
+    plt.plot(time[0:10000],filtered_signal[0:10000])
+    plt.subplot(2,5,3)
+    plt.plot(time[0:1000],signal[0:1000])
+    plt.subplot(2,5,4)
+    plt.plot(time[0:1000],filtered_signal[0:1000])
+    plt.subplot(2,5,5)
+    plt.plot(time[0:1000],signal[0:1000])
+    plt.plot(time[0:1000],filtered_signal[0:1000],'r')
+    plt.show()
     
     return filtered_signal
 
@@ -226,7 +234,7 @@ def filter_derivate(dataset):
     new_dataset = dataset.copy()
     
     # filter the imu signal and relabel as the angular position
-    new_dataset['angular position'] = lowpass_filter(new_dataset['time'],new_dataset['imu'],3,2,100)
+    new_dataset['angular position'] = lowpass_filter(new_dataset['time'],new_dataset['imu'],10,3,100)
     
     # drop the old column called 'imu'
     new_dataset.drop('imu',axis=1,inplace=True)
@@ -238,7 +246,7 @@ def filter_derivate(dataset):
     vel = np.append(vel,0)
     
     # filter the angular velocity signal
-    new_dataset['angular velocity'] = lowpass_filter(new_dataset['time'],vel,2,7,100)
+    new_dataset['angular velocity'] = lowpass_filter(new_dataset['time'],vel,2,3,100)
     
     # define the angular acceleration based on the change in velocity divded by sampling time
     acc = np.diff(new_dataset['angular velocity'],1)/0.01
@@ -247,7 +255,7 @@ def filter_derivate(dataset):
     acc = np.append(acc,0)
     
     # filter angular acceleration 
-    new_dataset['angular acceleration'] = lowpass_filter(new_dataset['time'],acc,2,9,100)
+    new_dataset['angular acceleration'] = lowpass_filter(new_dataset['time'],acc,2,3,100)
    
     # define the stretch derivatives and filter
     new_dataset['stretch'] = lowpass_filter(new_dataset['time'],new_dataset['stretch'],2,4,100)
@@ -384,7 +392,7 @@ def segment_data(dataset, angle_cutoff = [2,5,10,15]):
           
           
           # Find the start and end angular position
-          end_amplitude =  trajectory[count].iloc[-1,ap_col]#trajectory[count].iloc[amp_range_index,-3]
+          end_amplitude =  trajectory[count].iloc[-1,ap_col] #trajectory[count].iloc[amp_range_index,-3]
           start_amplitude = trajectory[count].iloc[0,ap_col]
           
          
@@ -740,7 +748,7 @@ def extract_features(segments, df,filename,trial_num):
       #     ad_var.append(np.var(segment_ind['deltoid']))
       #     pm_var.append(np.var(segment_ind['pecs']))
         
-          segment_ind['time'] = np.round([i - segment_ind['time'].iloc[0] for i in segment_ind['time']],2)
+          segment_ind['time'] = np.round([i - segment_ind['time'].loc[0] for i in segment_ind['time']],2)
         
           segment_length = len(segment_ind) # in samples
           indicies = np.round(np.linspace(0,segment_length-1, 6)).astype(int)
@@ -1633,7 +1641,7 @@ def baseline_regression_models(X_train, y_train, mean_val, kfolds=0, n_jobs=1, c
 
     predictors = list(X_train)
     feat_imp = pd.Series(RFR.feature_importances_, predictors).sort_values(ascending=False)
-    feat_imp.plot(kind='bar', title='Importance of Features')
+    feat_imp[:20].plot(kind='bar', title='Importance of Features')
     
     time_imp = 0
     imu_imp = 0
@@ -1687,17 +1695,17 @@ def combine_extracted_dataframes(extracted_features_test, trajectory_test, angle
 
     full_combined_features = {}
     
-    for window in range(0,len(angle_cutoff)-1):
+    for window in range(0,len(angle_cutoff)):
         full_combined_features[window] = extracted_features_test[0][window].copy()
     
         for j in range(1,6):
             
             full_combined_features[window] = full_combined_features[window].append(extracted_features_test[j][window], ignore_index=True, sort=False)
             
-    full_combined_trajectories = trajectory_test[0].copy()
+    full_combined_trajectories = {} #trajectory_test[0].copy()
     x=0
     
-    for k in range(1,6):
+    for k in range(0,6):
         for t in range(0,len(trajectory_test[0])):
             
             full_combined_trajectories[x] = trajectory_test[k][t]
@@ -1705,10 +1713,92 @@ def combine_extracted_dataframes(extracted_features_test, trajectory_test, angle
             
     return full_combined_features, full_combined_trajectories
 
+#%%
+"""
+Filter the features from the MJT R2 score
 
+"""
 
+def filter_trajectories_by_MJT_sim(full_combined_trajectories,full_combined_features, angle_cutoff,sim_score = 0.85):
 
+    from sklearn.metrics import r2_score
+    
+    r2score = []
+    
+    "Create the minimum jerk trajectory for comparison with traj"
+    
+    for p in range(0,len(full_combined_trajectories)):
+        
+        theta_col = full_combined_trajectories[p].columns.get_loc("angular position")
+        theta_d_col = full_combined_trajectories[p].columns.get_loc("angular position")
+        
+        start = full_combined_trajectories[p].iloc[0,theta_col]
+        end = full_combined_trajectories[p].iloc[-1,theta_col]
+        time_start_ = full_combined_trajectories[p].iloc[0,0]
+        time_end_ = full_combined_trajectories[p].iloc[-1,0]
+        
+        minimum_jerk_for_comp, vel = mjtg(start, end-start, 100, time_end_-time_start_)
+        time = np.linspace(time_start_,time_end_-0.01,len(minimum_jerk_for_comp))
+        
+        coefficient_of_dermination = r2_score(minimum_jerk_for_comp, full_combined_trajectories[p].iloc[0:len(minimum_jerk_for_comp),theta_col])
+        r2score.append(coefficient_of_dermination)
+    
+    """
+    Filter features based on R2 score
+    """
+    
+    filtered_mj_traj = full_combined_trajectories.copy()
+    filtered_mj_feat = full_combined_features.copy()
+    
+    for h in range(0, len(full_combined_trajectories.keys())):
+        
+        if r2score[h] < sim_score:
+            del filtered_mj_traj[h]
+            
+            for i in range(0,len(angle_cutoff)): ###NUMBER OF DATASETS
+            
+                #dataset_slct = filtered_mj_feat[i]
+                filtered_mj_feat[i].drop([h],inplace=True)
+    
+    for i in range(0,len(angle_cutoff)):
+        filtered_mj_feat[i] = filtered_mj_feat[i].reset_index(drop=True)
+                
+    
+    # RESET INDEX:
+    filtered_mj_traj = {i: v for i, v in enumerate(filtered_mj_traj.values())}
+    
+    return filtered_mj_feat, filtered_mj_traj
 
+def remove_outliers(filtered_mj_feat, filtered_mj_traj, outlier_threshold, angle_cutoff):
+
+    outlier_rows_per_dataframe = {} # this can be used to select trajectories
+    
+    trajectories = {}
+        
+    for j in filtered_mj_traj.keys():
+        filtered_mj_traj[j] = filtered_mj_traj[j].reset_index(drop=True)
+        
+    for i in range(0,len(angle_cutoff)):
+        
+        num_of_outliers_threshold= outlier_threshold*len(filtered_mj_feat[i].columns)
+        
+        Outliers_to_drop = detect_outliers(filtered_mj_feat[i], num_of_outliers_threshold ,list(filtered_mj_feat[i].columns.values))
+        
+        outlier_rows_per_dataframe[i] = Outliers_to_drop
+        
+        filtered_mj_feat[i].drop(outlier_rows_per_dataframe[i], axis = 0,inplace=True)
+            
+        filtered_mj_feat[i] = filtered_mj_feat[i].reset_index(drop=True)
+        
+        copy = filtered_mj_traj.copy()
+        
+        for j in outlier_rows_per_dataframe[i]:
+            del copy[j]
+            
+        trajectories[i] = copy
+        trajectories[i] = {i: v for i, v in enumerate(trajectories[i].values())}
+    
+    return filtered_mj_feat, trajectories, outlier_rows_per_dataframe
 
 
 
