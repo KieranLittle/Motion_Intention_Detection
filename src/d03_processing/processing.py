@@ -34,18 +34,20 @@ READ AND EXTRACT FEATURES FROM TEST DATA
 filename_list = ['1','2','3']
 
 # initialise dictionaries
-extracted_features_test = {}
-df_selected_features= {}
-trajectory_test = {}
-start_angle = {}
+extracted_features = {}
+df_trajectories = {}
 
 # Define the segment cut-off point, this is based on the angular position
 angle_cutoff = [1,2,5,10]
 
+# define number of extracted points from segment
 num_of_extracted_points = 10
 
 # initialise index
 i = 0
+
+# Name to save final dictionary of datasets (one dataset per time window)
+filename_save = 'dict.datasets_'+str(num_of_extracted_points)+'points'+'_change_filter3'
 
 """
     1. read_file(): reads in the raw data files 
@@ -69,19 +71,19 @@ for filename in filename_list:
         dataset_combined_signals, amplitudes, emg_MVC = read_file(filename,trial_num)
         
         ## Resample Dataset
-        dataset_test_RS = resample(dataset_combined_signals)
+        dataset_RS = resample(dataset_combined_signals)
         
         # Filter and find the signal derivatives
-        dataset_test_filtered = filter_derivate(dataset_test_RS)
+        dataset_filtered = filter_derivate(dataset_RS)
         
         ## Normalise to MVC EMG
-        dataset_filt_norm = normalise_MVC(emg_MVC, dataset_test_filtered)
+        dataset_norm = normalise_MVC(emg_MVC, dataset_filtered)
         
         ## Split the dataset into complete trajectories and then split into segments of different time windows
-        traj_segments_test,trajectory_test[i], df_trajectories_test = segment_data(dataset_filt_norm,angle_cutoff)
+        traj_segments,df_trajectories[i], df_trajectories_info = segment_data(dataset_norm,angle_cutoff)
         
         # Extract features from segments
-        extracted_features_test[i] = segment_extract_features(traj_segments_test,df_trajectories_test,filename,trial_num,num_of_extracted_points)
+        extracted_features[i] = segment_extract_features(traj_segments,df_trajectories_info,filename,trial_num,num_of_extracted_points)
         
         i = i+1
 
@@ -92,7 +94,7 @@ Combine all dataframes from trials into 1 dictionary containing 1 dataframe per 
 
 """
    
-full_combined_features, full_combined_trajectories = combine_extracted_dataframes(extracted_features_test, trajectory_test, angle_cutoff)
+full_combined_features, full_combined_trajectories = combine_extracted_dataframes(extracted_features, df_trajectories, angle_cutoff)
 
         
 #%%   
@@ -126,8 +128,6 @@ filtered_mj_feat, trajectories,outlier_rows_per_dataframe = remove_outliers(filt
 #     plt.show()
     
 #%% Dataset Preparation
-
-filename_save = 'dict.datasets_'+str(num_of_extracted_points)+'points'+'_change_filter3'
     
 pickle_out = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/'+filename_save,"wb")
 pickle.dump(filtered_mj_feat, pickle_out)
