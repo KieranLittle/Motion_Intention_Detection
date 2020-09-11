@@ -297,11 +297,9 @@ def segment_data(dataset, angle_cutoff = [2,5,10,15]):
     """
     
     # define window lengths
-    #angle_cutoff = [2,5,10,15]
     
     # intialise variables
     count = 0
-    #amplitude_var = np.zeros(len(dataset))
     amplitude_temp = []
     amplitude_change =[]
     half_amplitude_change = []
@@ -369,21 +367,21 @@ def segment_data(dataset, angle_cutoff = [2,5,10,15]):
           
           # find the index where the angular velocity exceeds the threshold
           a = trajectory_temp[count].loc[(trajectory_temp[count].iloc[:,av_col] > 1.0)]   #&(trajectory[count]['angular velocity']>0)]  
-          start_amplitude_index_temp = a.index[0]
+          start_amplitude_index = a.index[0]
           
           # Define the trajectory based on the start and end index that we have previously found and see if it works:        
-          trajectory_temp[count] = dataset.iloc[start_amplitude_index_temp:end_amplitude_index,:]#end_amplitude_index,:]
+          trajectory_temp[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]#end_amplitude_index,:]
           
           # This was to adapt the start and end index
           # mean_velocity_temp = np.mean(trajectory_temp[count]['angular velocity'])  
-          start_amplitude_index = start_amplitude_index_temp  #-int((mean_velocity_temp//2))
-          end_amplitude_index = end_amplitude_index   #+int((mean_velocity_temp//2))
+          # start_amplitude_index = start_amplitude_index_temp  #-int((mean_velocity_temp//2))
+          # end_amplitude_index = end_amplitude_index   #+int((mean_velocity_temp//2))
           
           """
           Define the final trajectory
           """
           # define the final trajectory
-          trajectory[count] = dataset.iloc[start_amplitude_index_temp:end_amplitude_index,:]
+          trajectory[count] = dataset.iloc[start_amplitude_index:end_amplitude_index,:]
           
           
           """
@@ -455,7 +453,7 @@ def segment_data(dataset, angle_cutoff = [2,5,10,15]):
         
     df = pd.DataFrame(dict)
         
-    return segments, trajectory,df #traj_segment
+    return segments, trajectory, df
 
 def plot_segments(segments, peak_amplitude,peak_velocity):
     
@@ -821,7 +819,7 @@ def extract_features(segments, df,filename,trial_num):
   return features_df #df_selected_features,col
 
 
-def segment_extract_features(segments, df, filename, trial_num, num_of_extracted_points = 10):
+def segment_extract_features(segments, df, filename, trial_num, num_of_extracted_points = 6):
     
   import numpy as np
   import pandas as pd
@@ -881,15 +879,7 @@ def segment_extract_features(segments, df, filename, trial_num, num_of_extracted
            Define segment length, split into X evenly spaced points
            Features of each point for each sensor (6):
              X = num_of_extracted_points 
-               
-             1. time
-             2. position
-             3. velocity 
-             4. acceleration
-             = 24 features
-            
-             + mean
-             + var
+              
           """
           
       #     stretch_mean.append(np.mean(segment_ind['stretch']))
@@ -910,8 +900,7 @@ def segment_extract_features(segments, df, filename, trial_num, num_of_extracted
           # find the legnth of the segment
           segment_length = len(segment_ind) # in samples
           
-          # create an array of X numbers between 0 and the segment length
-          # X = num_of_extracted_points
+          # create an array of X numbers between 0 and the segment length (X = num_of_extracted_points)
           indicies = np.round(np.linspace(0,segment_length-1, num_of_extracted_points)).astype(int)
           
           # extract the X number of points from the segment and then flatten the points to a 1D array

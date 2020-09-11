@@ -43,11 +43,18 @@ angle_cutoff = [1,2,5,10]
 # define number of extracted points from segment
 num_of_extracted_points = 10
 
+# similarity score between MJT and 
+sim_score = 0.85
+
+# threshold for outliers to be removed (percentage of number of columns containing an outlier in that row)
+outlier_threshold= 0.2 
+
 # initialise index
 i = 0
 
 # Name to save final dictionary of datasets (one dataset per time window)
-filename_save = 'dict.datasets_'+str(num_of_extracted_points)+'points'+'_change_filter3'
+filename_seg_save = 'dict.datasets_segments_'+str(num_of_extracted_points)+'points'+'_change_filter3'
+filename_traj_save = 'dict.datasets_trajectories_'+str(num_of_extracted_points)+'points'+'_change_filter3'
 
 """
     1. read_file(): reads in the raw data files 
@@ -102,20 +109,21 @@ full_combined_features, full_combined_trajectories = combine_extracted_dataframe
 Filter the features from the MJT R2 score
 
 """
-sim_score = 0.85
 
 filtered_mj_feat, filtered_mj_traj = filter_trajectories_by_MJT_sim(full_combined_trajectories,full_combined_features, angle_cutoff,sim_score)
 
 #%% Detect outliers and drop rows
 
 """
-Detect outliers and remove
+Detect outliers and remove from the segments.
+
+final_segments[window] 
+
+final trajectories is now structured: final_trajectories[window][trajectory number] as different segments are removed in different windows
 
 """
 
-outlier_threshold= 0.2 # outliers must be found in 10% of the columns (of each row) or above, to be removed
-
-filtered_mj_feat, trajectories,outlier_rows_per_dataframe = remove_outliers(filtered_mj_feat, filtered_mj_traj,outlier_threshold, angle_cutoff)
+final_segments, final_trajectories, outlier_rows_per_dataframe = remove_outliers(filtered_mj_feat, filtered_mj_traj,outlier_threshold, angle_cutoff)
         
 
 #%% Plot Trajectories
@@ -127,8 +135,13 @@ filtered_mj_feat, trajectories,outlier_rows_per_dataframe = remove_outliers(filt
 #     plt.plot(filtered_mj_traj[traj]['time'], filtered_mj_traj[traj]['angular position'])
 #     plt.show()
     
-#%% Dataset Preparation
+#%% Dataset Saving
     
-pickle_out = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/'+filename_save,"wb")
-pickle.dump(filtered_mj_feat, pickle_out)
+pickle_out = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/'+filename_seg_save,"wb")
+pickle.dump(final_segments, pickle_out)
 pickle_out.close()  
+
+pickle_out = open(r'/Users/Kieran/OneDrive - Nanyang Technological University/High-Level HMI/Experiment 1/Human_Motion_Intention_Analysis/data/03_processed/'+filename_traj_save,"wb")
+pickle.dump(final_trajectories, pickle_out)
+pickle_out.close()  
+
